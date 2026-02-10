@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- 背景 -->
+  <rect width="128" height="128" rx="24" fill="#f8f9fa"/>
+  
+  <!-- 笔记本主体 -->
+  <rect x="24" y="20" width="56" height="88" rx="8" fill="#667eea"/>
+  <rect x="28" y="24" width="48" height="80" rx="4" fill="white"/>
+  
+  <!-- 笔记本螺旋装订 -->
+  <circle cx="32" cy="36" r="3" fill="#667eea"/>
+  <circle cx="32" cy="52" r="3" fill="#667eea"/>
+  <circle cx="32" cy="68" r="3" fill="#667eea"/>
+  <circle cx="32" cy="84" r="3" fill="#667eea"/>
+  <circle cx="32" cy="100" r="3" fill="#667eea"/>
+  
+  <!-- 笔记内容线条 -->
+  <rect x="40" y="40" width="32" height="4" rx="2" fill="#e9ecef"/>
+  <rect x="40" y="52" width="28" height="4" rx="2" fill="#dee2e6"/>
+  <rect x="40" y="64" width="32" height="4" rx="2" fill="#e9ecef"/>
+  <rect x="40" y="76" width="24" height="4" rx="2" fill="#dee2e6"/>
+  <rect x="40" y="88" width="30" height="4" rx="2" fill="#e9ecef"/>
+  
+  <!-- 提示词/灯泡元素 -->
+  <g transform="translate(76, 44)">
+    <!-- 灯泡主体 -->
+    <path d="M20 0 C31 0 40 9 40 20 C40 28 35 35 28 38 L28 44 L12 44 L12 38 C5 35 0 28 0 20 C0 9 9 0 20 0" fill="#ffd93d"/>
+    <!-- 灯泡底座 -->
+    <rect x="14" y="44" width="12" height="8" rx="2" fill="#6c757d"/>
+    <rect x="16" y="52" width="8" height="4" rx="1" fill="#495057"/>
+    <!-- 灯泡内部发光 -->
+    <circle cx="20" cy="20" r="8" fill="#fff3cd" opacity="0.8"/>
+    <!-- 灯泡高光 -->
+    <ellipse cx="14" cy="12" rx="4" ry="6" fill="white" opacity="0.6"/>
+  </g>
+  
+  <!-- 收藏星星 -->
+  <g transform="translate(88, 88)">
+    <polygon points="12,2 15,8 22,9 17,14 18,21 12,18 6,21 7,14 2,9 9,8" fill="#764ba2"/>
+  </g>
+  
+  <!-- 小装饰点 -->
+  <circle cx="108" cy="24" r="6" fill="#667eea" opacity="0.3"/>
+  <circle cx="16" cy="108" r="4" fill="#764ba2" opacity="0.3"/>
+</svg>

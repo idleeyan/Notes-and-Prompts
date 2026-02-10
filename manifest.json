@@ -1,0 +1,59 @@
+{
+  "manifest_version": 3,
+  "name": "笔记收藏与提示词管理器",
+  "version": "3.0.8",
+  "description": "全面的笔记收藏与提示词管理系统，支持网页内容捕获、分类管理、统一搜索、AI智能编辑和增量同步",
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting",
+    "downloads",
+    "windows",
+    "tabs",
+    "contextMenus",
+    "clipboardWrite",
+    "notifications",
+    "alarms"
+  ],
+  "host_permissions": [
+    "<all_urls>"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"],
+      "css": ["content.css"]
+    }
+  ],
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "web_accessible_resources": [
+    {
+       "resources": [
+        "edit.html", "edit.css", "edit.js",
+        "clip.html", "clip.css", "clip.js",
+        "quick-note.html", "quick-note.css", "quick-note.js",
+        "dataManager.js", "incrementalSyncManager.js",
+        "lib/easymde.min.css", "lib/easymde.min.js",
+        "lib/marked.min.js",
+        "ai-settings.html", "ai-settings.css", "ai-settings.js",
+        "aiConfigManager.js", "aiServiceManager.js", "aiOperationManager.js"
+      ],
+      "matches": ["<all_urls>"]
+    }
+  ]
+}

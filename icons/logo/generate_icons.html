@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <title>生成LOGO图标</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      padding: 40px;
+      background: #f5f7fa;
+    }
+    .container {
+      max-width: 800px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      margin-bottom: 20px;
+    }
+    .icon-preview {
+      display: flex;
+      gap: 30px;
+      margin: 20px 0;
+      flex-wrap: wrap;
+    }
+    .icon-box {
+      text-align: center;
+    }
+    .icon-box canvas {
+      border: 2px solid #e1e4e8;
+      border-radius: 8px;
+      background: white;
+    }
+    .icon-box p {
+      margin-top: 10px;
+      color: #666;
+      font-size: 14px;
+    }
+    .btn {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 14px;
+      cursor: pointer;
+      margin-top: 20px;
+    }
+    .btn:hover {
+      opacity: 0.9;
+    }
+    .instructions {
+      background: #f8f9fa;
+      padding: 15px;
+      border-radius: 6px;
+      margin-top: 20px;
+      font-size: 13px;
+      color: #666;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎨 LOGO图标生成器</h1>
+    <p>点击下方按钮生成并下载扩展图标</p>
+    
+    <div class="icon-preview">
+      <div class="icon-box">
+        <canvas id="canvas16" width="16" height="16"></canvas>
+        <p>16x16</p>
+      </div>
+      <div class="icon-box">
+        <canvas id="canvas48" width="48" height="48"></canvas>
+        <p>48x48</p>
+      </div>
+      <div class="icon-box">
+        <canvas id="canvas128" width="128" height="128"></canvas>
+        <p>128x128</p>
+      </div>
+    </div>
+    
+    <button class="btn" onclick="generateAndDownload()">📥 下载所有图标</button>
+    
+    <div class="instructions">
+      <strong>使用说明：</strong><br>
+      1. 点击"下载所有图标"按钮<br>
+      2. 将下载的3个PNG文件放到 icons/ 目录下<br>
+      3. 刷新Chrome扩展即可看到新图标
+    </div>
+  </div>
+
+  <script>
+    function drawLogo(ctx, size) {
+      const center = size / 2;
+      const radius = size * 0.45;
+      
+      // 绘制渐变背景圆形
+      for (let r = radius; r > 0; r--) {
+        const ratio = r / radius;
+        const r_color = Math.floor(102 + (118 - 102) * (1 - ratio));
+        const g_color = Math.floor(126 + (75 - 126) * (1 - ratio));
+        const b_color = Math.floor(234 + (162 - 234) * (1 - ratio));
+        
+        ctx.beginPath();
+        ctx.arc(center, center, r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgb(${r_color}, ${g_color}, ${b_color})`;
+        ctx.fill();
+      }
+      
+      // 文档矩形
+      const docWidth = size * 0.4;
+      const docHeight = size * 0.5;
+      const docX = center - docWidth / 2 - size * 0.05;
+      const docY = center - docHeight / 2 - size * 0.05;
+      
+      // 白色文档背景
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.95)';
+      ctx.beginPath();
+      ctx.roundRect(docX, docY, docWidth, docHeight, size * 0.03);
+      ctx.fill();
+      
+      // 文档线条
+      const lineWidth = docWidth * 0.7;
+      const lineHeight = Math.max(2, size * 0.025);
+      const lineX = docX + docWidth * 0.15;
+      
+      // 线条1
+      ctx.fillStyle = '#667eea';
+      ctx.beginPath();
+      ctx.roundRect(lineX, docY + docHeight * 0.25, lineWidth, lineHeight, lineHeight / 2);
+      ctx.fill();
+      
+      // 线条2
+      ctx.fillStyle = 'rgba(118, 75, 162, 0.6)';
+      ctx.beginPath();
+      ctx.roundRect(lineX, docY + docHeight * 0.42, lineWidth * 0.78, lineHeight, lineHeight / 2);
+      ctx.fill();
+      
+      // 线条3
+      ctx.fillStyle = 'rgba(102, 126, 234, 0.4)';
+      ctx.beginPath();
+      ctx.roundRect(lineX, docY + docHeight * 0.58, lineWidth * 0.89, lineHeight, lineHeight / 2);
+      ctx.fill();
+      
+      // 线条4
+      ctx.fillStyle = 'rgba(118, 75, 162, 0.5)';
+      ctx.beginPath();
+      ctx.roundRect(lineX, docY + docHeight * 0.75, lineWidth * 0.67, lineHeight, lineHeight / 2);
+      ctx.fill();
+      
+      // 灯泡圆形
+      const bulbRadius = size * 0.14;
+      const bulbX = center + size * 0.18;
+      const bulbY = center + size * 0.18;
+      
+      // 灯泡光晕
+      for (let r = bulbRadius + size * 0.08; r > bulbRadius; r--) {
+        const alpha = (80 * (r - bulbRadius) / (size * 0.08)) / 255;
+        ctx.beginPath();
+        ctx.arc(bulbX, bulbY, r, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(255, 215, 0, ${alpha})`;
+        ctx.fill();
+      }
+      
+      // 灯泡主体
+      ctx.beginPath();
+      ctx.arc(bulbX, bulbY, bulbRadius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffd700';
+      ctx.fill();
+      
+      // 灯泡内部
+      ctx.beginPath();
+      ctx.arc(bulbX, bulbY, bulbRadius * 0.33, 0, Math.PI * 2);
+      ctx.fillStyle = '#ff8c00';
+      ctx.fill();
+      
+      // 灯泡高光
+      ctx.beginPath();
+      ctx.arc(bulbX - bulbRadius * 0.3, bulbY - bulbRadius * 0.3, bulbRadius * 0.25, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.fill();
+    }
+    
+    function generateIcons() {
+      [16, 48, 128].forEach(size => {
+        const canvas = document.getElementById(`canvas${size}`);
+        const ctx = canvas.getContext('2d');
+        drawLogo(ctx, size);
+      });
+    }
+    
+    function downloadIcon(size) {
+      const canvas = document.getElementById(`canvas${size}`);
+      const link = document.createElement('a');
+      link.download = `icon${size}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+    
+    function generateAndDownload() {
+      generateIcons();
+      setTimeout(() => {
+        [16, 48, 128].forEach((size, index) => {
+          setTimeout(() => downloadIcon(size), index * 200);
+        });
+      }, 100);
+    }
+    
+    // 页面加载时生成预览
+    window.onload = generateIcons;
+  </script>
+</body>
+</html>

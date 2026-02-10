@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>收藏网页内容 - 笔记收藏与提示词管理器</title>
+  <link rel="stylesheet" href="clip.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>📝 收藏网页内容</h1>
+      <div class="page-info" id="page-info">
+        <img id="page-favicon" class="favicon" src="" alt="">
+        <span id="page-title">正在获取页面信息...</span>
+      </div>
+    </header>
+
+    <div class="form-container">
+      <!-- 内容类型指示器 -->
+      <div class="form-group content-type-indicator" id="content-type-indicator">
+        <div class="detected-type-badge" id="detected-type-badge">
+          <span class="badge-icon">📄</span>
+          <span class="badge-text">文章</span>
+        </div>
+        <span class="detected-hint">自动识别内容类型</span>
+      </div>
+
+      <!-- 标题 -->
+      <div class="form-group">
+        <label for="note-title">标题</label>
+        <input type="text" id="note-title" placeholder="输入标题">
+      </div>
+
+      <!-- URL -->
+      <div class="form-group">
+        <label for="note-url">链接</label>
+        <input type="text" id="note-url" placeholder="网页链接" readonly>
+      </div>
+
+      <!-- 内容 -->
+      <div class="form-group" id="content-group">
+        <label for="note-content">内容</label>
+        <textarea id="note-content" rows="8" placeholder="收藏的内容..."></textarea>
+        <div class="content-actions">
+          <button type="button" id="extract-content-btn" class="btn-text">🔄 重新提取正文</button>
+          <button type="button" id="select-content-btn" class="btn-text">🖱️ 选择页面内容</button>
+          <button type="button" id="clear-format-btn" class="btn-text" style="display: none;">🧹 清除样式</button>
+        </div>
+      </div>
+
+      <!-- 相关图片（可折叠） -->
+      <div class="form-group images-collapsible" id="images-collapsible">
+        <div class="collapsible-header" id="images-toggle">
+          <span class="toggle-icon">🖼️</span>
+          <span class="toggle-label">相关图片</span>
+          <span class="selected-count" id="selected-count"></span>
+          <span class="toggle-arrow" id="toggle-arrow">▼</span>
+        </div>
+        
+        <div class="collapsible-content" id="images-content">
+          <!-- 页面图片选择 -->
+          <div class="images-section">
+            <div class="images-toolbar">
+              <button type="button" id="select-all-images" class="btn-text">全选</button>
+              <button type="button" id="deselect-all-images" class="btn-text">取消全选</button>
+              <span class="images-stats" id="images-stats"></span>
+            </div>
+            <div class="images-grid" id="images-grid">
+              <!-- 图片将动态加载 -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 分类 -->
+      <div class="form-group">
+        <label for="note-category">分类</label>
+        <select id="note-category">
+          <option value="未分类">未分类</option>
+          <option value="文章">📄 文章</option>
+          <option value="教程">📚 教程</option>
+          <option value="工具">🛠️ 工具</option>
+          <option value="资源">📦 资源</option>
+          <option value="灵感">💡 灵感</option>
+          <option value="图片">📷 图片</option>
+          <option value="截图">📸 截图</option>
+          <option value="设计素材">🎨 设计素材</option>
+        </select>
+        <input type="text" id="new-category" placeholder="或输入新分类" style="margin-top: 8px;">
+      </div>
+
+      <!-- 标签 -->
+      <div class="form-group">
+        <label for="note-tags">标签</label>
+        <div class="tags-input-container">
+          <input type="text" id="note-tags" placeholder="输入标签，按回车添加">
+          <div class="tags-list" id="tags-list"></div>
+        </div>
+        <div class="suggested-tags" id="suggested-tags">
+          <span class="suggested-label">推荐标签：</span>
+          <!-- 推荐标签动态加载 -->
+        </div>
+      </div>
+
+      <!-- 备注 -->
+      <div class="form-group">
+        <label for="note-remark">备注</label>
+        <textarea id="note-remark" rows="3" placeholder="添加备注..."></textarea>
+      </div>
+
+      <!-- 按钮组 -->
+      <div class="button-group">
+        <button id="save-btn" class="btn btn-primary">💾 保存收藏</button>
+        <button id="cancel-btn" class="btn btn-secondary">❌ 取消</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="clip.js"></script>
+</body>
+</html>

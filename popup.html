@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>笔记收藏与提示词管理器</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>📝 笔记与提示词</h1>
+    </header>
+
+     <!-- 一级入口区域 -->
+     <div class="primary-actions">
+       <div class="action-row">
+         <button id="quick-note-btn" class="action-btn action-btn-primary">
+           <span class="action-icon">
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+               <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+             </svg>
+           </span>
+           <span class="action-label">快速添加便签</span>
+         </button>
+         <button id="clip-page-btn" class="action-btn action-btn-primary">
+           <span class="action-icon">
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+               <circle cx="12" cy="12" r="10"/>
+               <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
+               <path d="M2 12h20"/>
+             </svg>
+           </span>
+           <span class="action-label">收藏当前网页</span>
+         </button>
+       </div>
+       <div class="action-row">
+         <button id="view-notes-btn" class="action-btn action-btn-primary action-btn-full">
+           <span class="action-icon">
+             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+               <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+               <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+               <path d="M8 7h8"/>
+               <path d="M8 11h8"/>
+               <path d="M8 15h5"/>
+             </svg>
+           </span>
+           <span class="action-label">打开管理页面</span>
+         </button>
+       </div>
+     </div>
+     
+     <!-- AI设置入口 -->
+     <div class="ai-section">
+       <div class="action-row">
+         <button id="ai-settings-btn" class="action-btn action-btn-primary action-btn-full">
+           <span class="action-icon">🤖</span>
+           <span class="action-label">AI设置</span>
+         </button>
+       </div>
+     </div>
+    
+    <!-- 提示词列表区域 -->
+    <div class="prompts-section">
+      <div class="section-header">
+        <h2>💡 提示词</h2>
+      </div>
+      <div class="filter-bar">
+        <select id="filter-prompt-category">
+          <option value="all">全部分类</option>
+        </select>
+        <input type="text" id="search-prompt" placeholder="搜索提示词...">
+      </div>
+      <div id="prompts-list" class="items-list">
+        <!-- 动态生成 -->
+      </div>
+    </div>
+  </div>
+
+  <script src="dataManager.js"></script>
+  <script src="incrementalSyncManager.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

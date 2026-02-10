@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>快速添加便签 - 笔记收藏与提示词管理器</title>
+  <link rel="stylesheet" href="quick-note.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>📝 快速添加笔记</h1>
+      <p class="subtitle">快速记录你的想法、灵感或任何内容</p>
+    </header>
+
+    <div class="form-container">
+      <!-- 标题 -->
+      <div class="form-group">
+        <label for="note-title">标题</label>
+        <input type="text" id="note-title" placeholder="可选">
+      </div>
+
+      <!-- 内容 -->
+      <div class="form-group">
+        <label for="note-content">内容 <span class="required">*</span></label>
+        <textarea id="note-content" rows="12" placeholder="在这里输入你的笔记内容..."></textarea>
+        <div class="char-count">
+          <span id="char-count">0</span> 字符
+        </div>
+      </div>
+
+      <!-- 分类 -->
+      <div class="form-group">
+        <label for="note-category">分类</label>
+        <select id="note-category">
+          <option value="未分类">未分类</option>
+          <option value="灵感">灵感</option>
+          <option value="待办">待办</option>
+          <option value="想法">想法</option>
+          <option value="摘录">摘录</option>
+          <option value="备忘">备忘</option>
+        </select>
+        <input type="text" id="new-category" placeholder="或输入新分类" style="margin-top: 8px;">
+      </div>
+
+      <!-- 标签 -->
+      <div class="form-group">
+        <label for="note-tags">标签</label>
+        <div class="tags-input-container">
+          <input type="text" id="note-tags" placeholder="输入标签，按回车添加">
+          <div class="tags-list" id="tags-list"></div>
+        </div>
+        <div class="suggested-tags" id="suggested-tags">
+          <span class="suggested-label">推荐标签：</span>
+        </div>
+      </div>
+
+      <!-- 来源/备注 -->
+      <div class="form-group">
+        <label for="note-source">来源（可选）</label>
+        <input type="text" id="note-source" placeholder="例如：书籍名称、会议记录、灵感来源等">
+      </div>
+
+      <!-- 按钮组 -->
+      <div class="button-group">
+        <button id="save-btn" class="btn btn-primary">💾 保存笔记</button>
+        <button id="cancel-btn" class="btn btn-secondary">❌ 取消</button>
+      </div>
+    </div>
+  </div>
+
+   <script src="dataManager.js"></script>
+   <script src="incrementalSyncManager.js"></script>
+   <script src="aiConfigManager.js"></script>
+   <script src="aiServiceManager.js"></script>
+   <script src="aiOperationManager.js"></script>
+   <script src="quick-note.js"></script>
+</body>
+</html>

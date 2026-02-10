@@ -1,0 +1,504 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>笔记与提示词管理器</title>
+  <link rel="stylesheet" href="lib/easymde.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link rel="stylesheet" href="notes.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- 侧边栏 -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h1>📝 管理中心</h1>
+        <p class="subtitle">笔记收藏与提示词管理</p>
+      </div>
+
+      <nav class="sidebar-nav">
+        <div class="nav-section content-type-section">
+          <h3>内容类型</h3>
+          <div class="content-type-tabs" id="content-type-list">
+            <button class="content-type-btn active" data-type="notes">
+              <span class="content-type-icon">📚</span>
+              <span class="content-type-label">笔记收藏</span>
+              <span class="content-type-count" id="count-notes">0</span>
+            </button>
+            <button class="content-type-btn" data-type="sticky">
+              <span class="content-type-icon">📝</span>
+              <span class="content-type-label">便签</span>
+              <span class="content-type-count" id="count-sticky">0</span>
+            </button>
+            <button class="content-type-btn" data-type="prompts">
+              <span class="content-type-icon">💡</span>
+              <span class="content-type-label">提示词</span>
+              <span class="content-type-count" id="count-prompts">0</span>
+            </button>
+            <button class="content-type-btn" data-type="gallery">
+              <span class="content-type-icon">🖼️</span>
+              <span class="content-type-label">图片相册</span>
+              <span class="content-type-count" id="count-images">0</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="nav-section" id="category-section">
+          <h3>分类</h3>
+          <ul id="category-list">
+            <li class="active" data-category="all">
+              <span class="icon">📁</span>
+              <span>全部</span>
+              <span class="count" id="count-all">0</span>
+            </li>
+          </ul>
+        </div>
+
+        <div class="nav-section">
+          <h3>标签</h3>
+          <div class="tag-cloud" id="tag-cloud">
+            <!-- 标签云动态生成 -->
+          </div>
+        </div>
+      </nav>
+
+      <div class="sidebar-footer">
+        <button id="new-item-btn" class="btn btn-primary">
+          <span>+</span> 新建笔记
+        </button>
+        <button id="settings-btn" class="btn btn-secondary">
+          <span>⚙️</span> 设置
+        </button>
+        <div class="version-info" id="version-info">v2.0.0</div>
+      </div>
+    </aside>
+
+    <!-- 主内容区 -->
+    <main class="main-content">
+      <!-- 顶部工具栏 -->
+      <header class="toolbar">
+        <div class="search-box">
+          <input type="text" id="search-input" placeholder="搜索标题、内容或标签...">
+          <button id="search-btn">🔍</button>
+        </div>
+
+        <div class="toolbar-actions">
+          <select id="sort-select">
+            <option value="newest">最新创建</option>
+            <option value="updated">最近更新</option>
+            <option value="oldest">最早创建</option>
+          </select>
+
+            <div class="view-toggle">
+            <button id="view-list" class="active" title="列表视图">☰</button>
+            <button id="view-grid" title="网格视图">⊞</button>
+          </div>
+
+          <button id="layout-toggle" class="layout-toggle-btn" title="切换侧边栏位置">⇄</button>
+        </div>
+      </header>
+
+      <!-- 内容列表 -->
+      <div class="content-area">
+        <div id="items-container" class="items-list">
+          <!-- 内容列表动态生成 -->
+        </div>
+
+        <!-- 空状态 -->
+        <div id="empty-state" class="empty-state" style="display: none;">
+          <div class="empty-icon">📝</div>
+          <h3>还没有内容</h3>
+          <p>点击左侧"新建"按钮创建你的第一条内容</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- 笔记查看模态框 -->
+  <div id="view-modal" class="modal">
+    <div class="modal-content view-modal-content">
+      <div class="modal-header">
+        <h2 id="view-modal-title">笔记详情</h2>
+        <button class="modal-close" id="view-modal-close">&times;</button>
+      </div>
+      <div class="modal-body view-modal-body">
+        <div class="view-note-header">
+          <h3 id="view-note-title"></h3>
+          <span class="view-note-category" id="view-note-category"></span>
+        </div>
+        <div class="view-note-images" id="view-note-images"></div>
+        <div class="view-note-content" id="view-note-content" style="height: 400px; overflow-y: auto;"></div>
+        <div class="view-note-tags" id="view-note-tags"></div>
+        <div class="view-note-source" id="view-note-source"></div>
+        <div class="view-note-meta" id="view-note-meta"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="edit-note-btn" class="btn btn-primary">编辑</button>
+        <button id="delete-view-note-btn" class="btn btn-danger">删除</button>
+        <button id="close-view-modal-btn" class="btn btn-secondary">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 笔记编辑模态框 -->
+  <div id="note-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-title">编辑笔记</h2>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>标题</label>
+          <input type="text" id="edit-note-title" placeholder="笔记标题">
+        </div>
+        <div class="form-group">
+          <label>内容</label>
+          <textarea id="edit-note-content" placeholder="笔记内容..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>分类</label>
+          <select id="edit-note-category">
+            <option value="未分类">未分类</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>标签</label>
+          <div class="tags-input-container">
+            <input type="text" id="edit-note-tags" placeholder="输入标签，按回车添加">
+            <div class="tags-list" id="edit-tags-list"></div>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>来源</label>
+          <input type="text" id="edit-note-source" placeholder="笔记来源（可选）">
+        </div>
+        <div class="form-group" id="edit-images-group" style="display: none;">
+          <label>图片</label>
+          <div class="edit-images-grid" id="edit-images-grid"></div>
+        </div>
+        <div class="note-meta" id="note-meta">
+          <!-- 创建时间、更新时间等 -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="save-note-btn" class="btn btn-primary">保存</button>
+        <button id="close-modal-btn" class="btn btn-secondary">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 提示词查看模态框 -->
+  <div id="prompt-view-modal" class="modal">
+    <div class="modal-content view-modal-content">
+      <div class="modal-header">
+        <h2>提示词详情</h2>
+        <button class="modal-close" id="prompt-view-modal-close">&times;</button>
+      </div>
+      <div class="modal-body view-modal-body">
+        <div class="view-note-header">
+          <h3 id="view-prompt-title"></h3>
+          <span class="view-note-category" id="view-prompt-category"></span>
+        </div>
+        <div id="view-prompt-preview" class="prompt-preview-image" style="display: none;">
+          <img id="view-prompt-preview-img" src="" alt="预览效果">
+          <div class="prompt-preview-info" id="view-prompt-generation-info" style="display: none;"></div>
+        </div>
+        <div class="view-prompt-content" id="view-prompt-content"></div>
+        <div class="view-note-tags" id="view-prompt-tags"></div>
+        <div class="view-note-meta" id="view-prompt-meta"></div>
+      </div>
+      <div class="modal-footer">
+        <button id="copy-prompt-btn" class="btn btn-primary">复制内容</button>
+        <button id="edit-prompt-btn" class="btn btn-secondary">编辑</button>
+        <button id="delete-prompt-btn" class="btn btn-danger">删除</button>
+        <button id="close-prompt-view-btn" class="btn btn-secondary">关闭</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 提示词编辑模态框 -->
+  <div id="prompt-modal" class="modal">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="prompt-modal-title">编辑提示词</h2>
+        <button class="modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>标题</label>
+          <input type="text" id="edit-prompt-title" placeholder="提示词标题">
+        </div>
+        <div class="form-group">
+          <label>内容</label>
+          <textarea id="edit-prompt-content" placeholder="提示词内容..."></textarea>
+        </div>
+        <div class="form-group">
+          <label>预览图片（可选）</label>
+          <div class="preview-image-edit">
+            <div id="edit-prompt-preview-container" class="preview-image-container" style="display: none;">
+              <img id="edit-prompt-preview-img" src="" alt="预览效果">
+              <button type="button" id="edit-prompt-remove-image" class="remove-image-btn" title="移除图片">×</button>
+            </div>
+            <input type="text" id="edit-prompt-image-url" placeholder="输入图片URL或拖放图片到此处" class="preview-image-input">
+            <input type="file" id="edit-prompt-image-file" accept="image/*" class="preview-image-file">
+            <button type="button" id="edit-prompt-upload-image" class="btn btn-secondary btn-sm">上传图片</button>
+          </div>
+        </div>
+        <div id="edit-prompt-generation-info" class="generation-info-edit" style="display: none;">
+          <div class="form-group">
+            <label>生成参数</label>
+            <div class="generation-params-grid">
+              <input type="text" id="edit-gen-model" placeholder="模型名称">
+              <input type="text" id="edit-gen-steps" placeholder="步数">
+              <input type="text" id="edit-gen-cfg" placeholder="CFG Scale">
+              <input type="text" id="edit-gen-sampler" placeholder="采样器">
+              <input type="text" id="edit-gen-seed" placeholder="种子值">
+            </div>
+          </div>
+          <div class="form-group">
+            <label>负面提示词（可选）</label>
+            <textarea id="edit-gen-negative" rows="2" placeholder="输入负面提示词"></textarea>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>分类</label>
+          <select id="edit-prompt-category">
+            <option value="通用">通用</option>
+          </select>
+          <input type="text" id="edit-prompt-new-category" placeholder="或输入新分类" style="margin-top: 8px;">
+        </div>
+        <div class="form-group">
+          <label>标签</label>
+          <div class="tags-input-container">
+            <input type="text" id="edit-prompt-tags" placeholder="输入标签，按回车添加">
+            <div class="tags-list" id="edit-prompt-tags-list"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button id="save-prompt-btn" class="btn btn-primary">保存</button>
+        <button id="close-prompt-modal-btn" class="btn btn-secondary">取消</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 设置模态框 -->
+  <div id="settings-modal" class="modal">
+    <div class="modal-content settings-modal-content">
+      <div class="modal-header">
+        <h2>设置</h2>
+        <button class="modal-close" id="settings-modal-close">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label>输入框检测设置（提示词功能）</label>
+          <div class="radio-group">
+            <div class="radio-item">
+              <input type="radio" name="inject-mode" id="inject-all" value="all" checked>
+              <label for="inject-all">所有网站</label>
+            </div>
+            <div class="radio-item">
+              <input type="radio" name="inject-mode" id="inject-whitelist" value="whitelist">
+              <label for="inject-whitelist">仅白名单</label>
+            </div>
+            <div class="radio-item">
+              <input type="radio" name="inject-mode" id="inject-blacklist" value="blacklist">
+              <label for="inject-blacklist">排除黑名单</label>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-group" id="whitelist-group" style="display: none;">
+          <label for="whitelist">白名单网站（每行一个域名）</label>
+          <textarea id="whitelist" rows="3" placeholder="例如：&#10;chat.openai.com&#10;claude.ai"></textarea>
+        </div>
+
+        <div class="form-group" id="blacklist-group" style="display: none;">
+          <label for="blacklist">黑名单网站（每行一个域名）</label>
+          <textarea id="blacklist" rows="3" placeholder="例如：&#10;google.com&#10;baidu.com"></textarea>
+        </div>
+
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #e9ecef;">
+
+        <!-- 分类管理 -->
+        <div class="form-group">
+          <label>分类管理</label>
+          <div class="category-manager">
+            <div class="category-input-group">
+              <input type="text" id="new-category-input" placeholder="输入新分类名称">
+              <button id="add-category-btn" class="btn btn-small">添加</button>
+            </div>
+            <div class="category-list" id="settings-category-list">
+              <!-- 分类列表动态生成 -->
+            </div>
+          </div>
+        </div>
+
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #e9ecef;">
+
+        <!-- 数据导入导出 -->
+        <div class="form-group">
+          <label>📦 数据导入导出</label>
+          <div class="button-group">
+            <button id="export-btn" class="btn btn-secondary">📤 导出JSON</button>
+            <button id="import-btn" class="btn btn-secondary">📄 导入JSON</button>
+            <input type="file" id="import-file" accept=".json" style="display: none;">
+          </div>
+          <p style="font-size: 12px; color: #666; margin-top: 8px;">
+            导出文件将保存到下载文件夹，导入时会自动去重
+          </p>
+        </div>
+
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #e9ecef;">
+
+        <!-- 屏蔽输入框管理 -->
+        <div class="form-group">
+          <label>🚫 屏蔽输入框管理</label>
+          <p style="font-size: 12px; color: #666; margin-bottom: 12px;">
+            在网页输入框的提示词按钮上右键点击，选择"屏蔽此输入框"即可屏蔽。被屏蔽的输入框不会显示提示词按钮。
+          </p>
+          <div class="category-manager">
+            <div class="category-input-group">
+              <select id="blocked-host-select" style="flex: 1;">
+                <option value="">选择网站...</option>
+              </select>
+              <button id="refresh-blocked-btn" class="btn btn-small">🔄 刷新</button>
+            </div>
+            <div class="category-list" id="blocked-inputs-list" style="margin-top: 12px;">
+              <!-- 屏蔽列表动态生成 -->
+            </div>
+          </div>
+        </div>
+
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #e9ecef;">
+
+        <!-- WebDAV同步设置 -->
+        <div class="form-group">
+          <label>☁️ WebDAV同步（飞牛NAS）</label>
+          <p style="font-size: 12px; color: #666; margin-bottom: 12px;">
+            配置WebDAV服务，将数据同步到飞牛NAS或其他支持WebDAV的网盘。
+          </p>
+          
+          <div class="webdav-settings" style="background: #f8f9fa; border-radius: 8px; padding: 16px;">
+            <div style="margin-bottom: 12px;">
+              <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                <input type="checkbox" id="webdav-enabled" style="width: auto;">
+                <span>启用WebDAV同步</span>
+              </label>
+            </div>
+            
+            <div id="webdav-config" style="display: none;">
+              <div style="margin-bottom: 12px;">
+                <label style="font-size: 13px; color: #495057; display: block; margin-bottom: 4px;">服务器地址</label>
+                <input type="text" id="webdav-server" placeholder="http://192.168.1.100:5005" style="width: 100%; padding: 8px 12px; border: 1px solid #e1e4e8; border-radius: 6px; font-size: 13px;">
+                <p style="font-size: 11px; color: #999; margin-top: 4px;">飞牛NAS默认端口为5005</p>
+              </div>
+              
+              <div style="margin-bottom: 12px;">
+                <label style="font-size: 13px; color: #495057; display: block; margin-bottom: 4px;">用户名</label>
+                <input type="text" id="webdav-username" placeholder="NAS用户名" style="width: 100%; padding: 8px 12px; border: 1px solid #e1e4e8; border-radius: 6px; font-size: 13px;">
+              </div>
+              
+              <div style="margin-bottom: 12px;">
+                <label style="font-size: 13px; color: #495057; display: block; margin-bottom: 4px;">密码</label>
+                <input type="password" id="webdav-password" placeholder="NAS密码" style="width: 100%; padding: 8px 12px; border: 1px solid #e1e4e8; border-radius: 6px; font-size: 13px;">
+              </div>
+              
+              <div style="margin-bottom: 12px;">
+                <label style="font-size: 13px; color: #495057; display: block; margin-bottom: 4px;">同步路径</label>
+                <input type="text" id="webdav-path" placeholder="/username/notebook-sync/" value="/notebook-sync/" style="width: 100%; padding: 8px 12px; border: 1px solid #e1e4e8; border-radius: 6px; font-size: 13px;">
+                <p style="font-size: 11px; color: #999; margin-top: 4px;">建议格式: /用户名/目录名/</p>
+              </div>
+              
+              <div style="margin-bottom: 12px;">
+                <label style="font-size: 13px; color: #495057; display: block; margin-bottom: 4px;">文件名</label>
+                <input type="text" id="webdav-filename" placeholder="notebook-data.json" value="notebook-data.json" style="width: 100%; padding: 8px 12px; border: 1px solid #e1e4e8; border-radius: 6px; font-size: 13px;">
+              </div>
+
+              <hr style="margin: 16px 0; border: none; border-top: 1px solid #e1e4e8;">
+
+              <!-- 自动同步设置 -->
+              <div style="margin-bottom: 12px;">
+                <label style="font-size: 13px; color: #495057; display: block; margin-bottom: 8px; font-weight: 500;">⚡ 自动同步设置</label>
+                
+                <div style="margin-bottom: 8px;">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+                    <input type="checkbox" id="webdav-auto-sync" style="width: auto;" checked>
+                    <span>启用自动同步</span>
+                  </label>
+                </div>
+                
+                <div style="margin-bottom: 8px;">
+                  <label style="display: flex; align-items: center; gap: 8px; cursor: pointer; font-size: 13px;">
+                    <input type="checkbox" id="webdav-sync-on-change" style="width: auto;" checked>
+                    <span>数据变更时自动同步</span>
+                  </label>
+                </div>
+                
+                <div style="margin-bottom: 8px;">
+                  <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">定时同步间隔</label>
+                  <select id="webdav-sync-interval" style="width: 100%; padding: 6px 10px; border: 1px solid #e1e4e8; border-radius: 6px; font-size: 13px;">
+                    <option value="0.08">5秒（测试用）</option>
+                    <option value="1">1分钟</option>
+                    <option value="5" selected>5分钟</option>
+                    <option value="10">10分钟</option>
+                    <option value="30">30分钟</option>
+                    <option value="60">1小时</option>
+                  </select>
+                </div>
+                
+                <div style="margin-bottom: 8px;">
+                  <label style="font-size: 12px; color: #666; display: block; margin-bottom: 4px;">冲突解决策略</label>
+                  <select id="webdav-conflict-resolution" style="width: 100%; padding: 6px 10px; border: 1px solid #e1e4e8; border-radius: 6px; font-size: 13px;">
+                    <option value="newest" selected>使用最新数据</option>
+                    <option value="local">优先本地数据</option>
+                    <option value="remote">优先远程数据</option>
+                  </select>
+                </div>
+              </div>
+
+              <div style="display: flex; gap: 8px; margin-bottom: 12px;">
+                <button id="webdav-test-btn" class="btn btn-small" style="flex: 1;">🔌 测试连接</button>
+                <button id="webdav-save-btn" class="btn btn-small" style="flex: 1;">💾 保存配置</button>
+              </div>
+              
+              <div style="display: flex; gap: 8px;">
+                <button id="webdav-upload-btn" class="btn btn-small" style="flex: 1;">⬆️ 上传数据</button>
+                <button id="webdav-download-btn" class="btn btn-small" style="flex: 1;">⬇️ 下载数据</button>
+              </div>
+              
+              <div style="display: flex; gap: 8px; margin-top: 8px;">
+                <button id="export-sync-log-btn" class="btn btn-small btn-secondary" style="flex: 1;">📋 导出同步日志</button>
+                <button id="clear-sync-log-btn" class="btn btn-small btn-secondary" style="flex: 1;">🗑️ 清除日志</button>
+              </div>
+              
+              <div id="webdav-status" style="margin-top: 12px; padding: 8px 12px; border-radius: 6px; font-size: 12px; display: none;"></div>
+              
+              <div id="webdav-sync-info" style="margin-top: 12px; padding: 10px 12px; background: #e3f2fd; border-radius: 6px; font-size: 12px; color: #1976d2; display: none;">
+                <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
+                  <span id="sync-status-icon">✓</span>
+                  <span id="sync-status-text">同步状态</span>
+                </div>
+                <div id="sync-last-time" style="color: #666; font-size: 11px;">上次同步: 从未</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="lib/marked.min.js"></script>
+  <script src="lib/easymde.min.js"></script>
+  <script src="webdavConfig.js"></script>
+  <script src="webdavClient.js"></script>
+  <script src="dataManager.js"></script>
+  <script src="incrementalSyncManager.js"></script>
+  <script src="aiConfigManager.js"></script>
+  <script src="aiServiceManager.js"></script>
+  <script src="aiOperationManager.js"></script>
+  <script src="notes.js"></script>
+</body>
+</html>
