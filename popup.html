@@ -50,25 +50,12 @@
        </div>
      </div>
      
-     <!-- AI设置入口 -->
-     <div class="ai-section">
-       <div class="action-row">
-         <button id="ai-settings-btn" class="action-btn action-btn-primary action-btn-full">
-           <span class="action-icon">🤖</span>
-           <span class="action-label">AI设置</span>
-         </button>
-       </div>
-     </div>
-    
     <!-- 提示词列表区域 -->
     <div class="prompts-section">
       <div class="section-header">
         <h2>💡 提示词</h2>
       </div>
       <div class="filter-bar">
-        <select id="filter-prompt-category">
-          <option value="all">全部分类</option>
-        </select>
         <input type="text" id="search-prompt" placeholder="搜索提示词...">
       </div>
       <div id="prompts-list" class="items-list">
@@ -78,7 +65,6 @@
   </div>
 
   <script src="dataManager.js"></script>
-  <script src="incrementalSyncManager.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

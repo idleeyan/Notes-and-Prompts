@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>编辑提示词 - 笔记收藏与提示词管理器</title>
+  <link rel="stylesheet" href="lib/easymde.min.css">
+  <link rel="stylesheet" href="enhanced-editor.css">
+  <link rel="stylesheet" href="prompt-edit.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>编辑提示词</h1>
+      <div class="header-actions">
+        <button id="save-btn" class="btn btn-primary">保存</button>
+        <button id="close-btn" class="btn btn-secondary">关闭</button>
+      </div>
+    </header>
+
+    <div class="form-container">
+      <div class="form-row">
+        <div class="form-group form-group-title">
+          <label for="edit-title">标题</label>
+          <input type="text" id="edit-title" placeholder="提示词标题">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="edit-content">提示词内容</label>
+        <textarea id="edit-content" placeholder="输入提示词内容，支持 Markdown 格式..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>预览图</label>
+        <div class="preview-image-container">
+          <div class="preview-image-wrapper" id="preview-image-wrapper">
+            <img id="preview-image-preview" src="" alt="预览图" style="display: none;">
+            <div class="preview-image-placeholder" id="preview-image-placeholder">
+              <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+              <span>点击下方按钮添加预览图</span>
+            </div>
+          </div>
+          <div class="preview-image-actions">
+            <input type="text" id="edit-preview-image" placeholder="输入图片 URL 或选择本地图片" style="flex: 1;">
+            <label class="btn btn-secondary file-upload-btn">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              本地上传
+              <input type="file" id="preview-image-upload" accept="image/*" style="display: none;">
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label>标签</label>
+        <div class="tags-input-container" id="tags-container">
+          <div class="tags-list" id="tags-list"></div>
+        </div>
+        <div class="suggested-tags" id="suggested-tags">
+          <span class="suggested-label">推荐标签：</span>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3>生成参数（可选）</h3>
+        <div class="form-row form-row-3">
+          <div class="form-group">
+            <label for="edit-gen-model">模型</label>
+            <input type="text" id="edit-gen-model" placeholder="如: SDXL, Midjourney">
+          </div>
+          <div class="form-group">
+            <label for="edit-gen-steps">步数</label>
+            <input type="text" id="edit-gen-steps" placeholder="如: 20, 30">
+          </div>
+          <div class="form-group">
+            <label for="edit-gen-cfg">CFG Scale</label>
+            <input type="text" id="edit-gen-cfg" placeholder="如: 7, 8.5">
+          </div>
+        </div>
+        <div class="form-row form-row-2">
+          <div class="form-group">
+            <label for="edit-gen-sampler">采样器</label>
+            <input type="text" id="edit-gen-sampler" placeholder="如: DPM++ 2M">
+          </div>
+          <div class="form-group">
+            <label for="edit-gen-seed">种子</label>
+            <input type="text" id="edit-gen-seed" placeholder="如: 12345678">
+          </div>
+        </div>
+        <div class="form-group">
+          <label for="edit-gen-size">尺寸</label>
+          <input type="text" id="edit-gen-size" placeholder="如: 512x512, 1024x1024">
+        </div>
+        <div class="form-group">
+          <label for="edit-gen-negative">负面提示词</label>
+          <textarea id="edit-gen-negative" placeholder="不想出现的元素..." rows="2"></textarea>
+        </div>
+      </div>
+
+      <div class="meta-info" id="meta-info">
+      </div>
+    </div>
+  </div>
+
+  <script src="lib/marked.min.js"></script>
+  <script src="lib/easymde.min.js"></script>
+  <script src="utils.js"></script>
+  <script src="enhancedEditor.js"></script>
+  <script src="tagEditor.js"></script>
+  <script src="dataManager.js"></script>
+  <script src="prompt-edit.js"></script>
+</body>
+</html>

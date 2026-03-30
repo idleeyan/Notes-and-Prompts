@@ -2,12 +2,30 @@
 class QuickNotePage {
   constructor() {
     this.currentTags = [];
+    this.clipType = this.getClipTypeFromUrl();
     this.init();
+  }
+
+  getClipTypeFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('clipType') || 'normal';
   }
 
   async init() {
     // 加载数据管理器
     await this.loadDataManager();
+
+    // 更新页面标题
+    const isSticky = this.clipType === 'sticky';
+    const header = document.querySelector('.header h1');
+    const subtitle = document.querySelector('.subtitle');
+    if (isSticky) {
+      header.textContent = '📝 快速添加便签';
+      subtitle.textContent = '快速记录你的想法和灵感';
+    } else {
+      header.textContent = '📚 快速添加笔记';
+      subtitle.textContent = '快速收藏网页内容和笔记';
+    }
 
     // 绑定事件
     this.bindEvents();
@@ -53,11 +71,6 @@ class QuickNotePage {
     const contentTextarea = document.getElementById('note-content');
     contentTextarea.addEventListener('input', () => {
       document.getElementById('char-count').textContent = contentTextarea.value.length;
-    });
-
-    // 分类选择变化时，清空新分类输入框
-    document.getElementById('note-category').addEventListener('change', () => {
-      document.getElementById('new-category').value = '';
     });
 
     // 快捷键支持
@@ -141,9 +154,6 @@ class QuickNotePage {
 
   // 保存笔记
   async saveNote() {
-    const categorySelect = document.getElementById('note-category');
-    const newCategory = document.getElementById('new-category').value.trim();
-    const category = newCategory || categorySelect.value;
     let title = document.getElementById('note-title').value.trim();
     const content = document.getElementById('note-content').value.trim();
     const source = document.getElementById('note-source').value.trim();
@@ -160,22 +170,25 @@ class QuickNotePage {
     }
 
     // 构建便签数据
+    const keywords = dataManager.extractKeywords(title + ' ' + content, 5);
+    const autoTags = keywords.filter(k => !this.currentTags.includes(k));
+    const finalTags = [...this.currentTags, ...autoTags];
+
     const noteData = {
       title,
       content,
       excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
-      url: '', // 便签没有URL
-      favicon: '', // 便签没有favicon
+      url: '',
+      favicon: '',
       images: [],
-      category,
-      tags: this.currentTags,
-      clipType: 'sticky', // 标记为便签类型
-      remark: source // 将来源保存到备注
+      tags: finalTags,
+      clipType: this.clipType,
+      remark: source
     };
 
     try {
       await dataManager.addNote(noteData);
-      this.showToast('笔记保存成功！', 'success');
+      this.showToast(autoTags.length > 0 ? `便签保存成功！自动添加标签：${autoTags.join(', ')}` : '便签保存成功！', 'success');
 
       // 通知后台刷新
       chrome.runtime.sendMessage({ action: 'settingsChanged' });
@@ -196,8 +209,6 @@ class QuickNotePage {
     document.getElementById('note-title').value = '';
     document.getElementById('note-content').value = '';
     document.getElementById('note-source').value = '';
-    document.getElementById('new-category').value = '';
-    document.getElementById('note-category').value = '未分类';
     document.getElementById('char-count').textContent = '0';
     this.currentTags = [];
     this.renderTags();

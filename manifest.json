@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "笔记收藏与提示词管理器",
-  "version": "3.0.8",
-  "description": "全面的笔记收藏与提示词管理系统，支持网页内容捕获、分类管理、统一搜索、AI智能编辑和增量同步",
+  "version": "3.13.2",
+  "description": "全面的笔记收藏与提示词管理系统，支持标签管理和统一搜索",
   "permissions": [
     "storage",
     "activeTab",
@@ -44,14 +44,19 @@
   "web_accessible_resources": [
     {
        "resources": [
-        "edit.html", "edit.css", "edit.js",
+        "utils.js",
         "clip.html", "clip.css", "clip.js",
         "quick-note.html", "quick-note.css", "quick-note.js",
-        "dataManager.js", "incrementalSyncManager.js",
+        "note-edit.html", "note-edit.css", "note-edit.js",
+        "prompt-edit.html", "prompt-edit.css", "prompt-edit.js",
+        "dataManager.js",
         "lib/easymde.min.css", "lib/easymde.min.js",
         "lib/marked.min.js",
-        "ai-settings.html", "ai-settings.css", "ai-settings.js",
-        "aiConfigManager.js", "aiServiceManager.js", "aiOperationManager.js"
+        "tagEditor.js",
+        "enhancedEditor.js", "enhanced-editor.css",
+        "notes/notesUI.js", "notes/notesEditor.js",
+        "notes/notesPromptEditor.js", "notes/notesWebDAV.js",
+        "notes/notesSettings.js", "notes/notesCore.js"
       ],
       "matches": ["<all_urls>"]
     }

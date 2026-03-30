@@ -97,25 +97,6 @@
   max-height: 60vh;
 }
 
-/* 分类组 */
-.prompt-category-group {
-  margin-bottom: 16px;
-}
-
-.prompt-category-group:last-child {
-  margin-bottom: 0;
-}
-
-.prompt-category-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: #667eea;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 8px;
-  padding: 0 4px;
-}
-
 /* 提示词项 */
 .prompt-item-select {
   padding: 12px;

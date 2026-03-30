@@ -431,15 +431,6 @@ body {
   white-space: nowrap;
 }
 
-.item-category {
-  font-size: 11px;
-  padding: 2px 8px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border-radius: 10px;
-  white-space: nowrap;
-}
-
 .item-content {
   font-size: 12px;
   color: #666;
@@ -733,111 +724,6 @@ body {
   background: #a8a8a8;
 }
 
-/* 分类管理 */
-.category-manager {
-  background: #f8f9fa;
-  border-radius: 8px;
-  padding: 12px;
-}
-
-.category-input-group {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 12px;
-}
-
-.category-input-group input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid #e1e4e8;
-  border-radius: 6px;
-  font-size: 13px;
-}
-
-.btn-small {
-  width: auto;
-  padding: 8px 16px;
-  font-size: 12px;
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
-  border: none;
-  border-radius: 6px;
-  cursor: pointer;
-}
-
-.category-list {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  max-height: 200px;
-  overflow-y: auto;
-}
-
-.category-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 12px;
-  background: white;
-  border-radius: 6px;
-  border: 1px solid #e1e4e8;
-}
-
-.category-item:hover {
-  border-color: #667eea;
-}
-
-.category-name {
-  font-size: 13px;
-  color: #333;
-}
-
-.category-count {
-  font-size: 11px;
-  color: #999;
-  margin-left: 8px;
-}
-
-.category-actions {
-  display: flex;
-  gap: 4px;
-}
-
-.category-btn {
-  padding: 4px 8px;
-  font-size: 11px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  background: #e9ecef;
-  color: #495057;
-}
-
-.category-btn:hover {
-  background: #dee2e6;
-}
-
-.category-btn.delete {
-  background: #dc3545;
-  color: white;
-}
-
-.category-btn.delete:hover {
-  background: #c82333;
-}
-
-.category-item.editing {
-  background: #f8f9ff;
-}
-
-.category-item.editing input {
-  flex: 1;
-  padding: 4px 8px;
-  border: 1px solid #667eea;
-  border-radius: 4px;
-  font-size: 13px;
-}
-
 /* 快速笔记按钮 */
 .quick-note-section {
   margin: 16px 0;
@@ -875,10 +761,6 @@ body {
 #quick-note-btn small {
   font-size: 12px;
   color: #666;
-}
-
-#quick-note-btn.btn-full {
-  width: 100%;
 }
 
 /* 查看笔记按钮 */

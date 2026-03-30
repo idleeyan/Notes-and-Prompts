@@ -67,7 +67,6 @@ function calculateItemChecksum(item) {
   const relevantData = {
     title: item.title || '',
     content: item.content || '',
-    category: item.category || '',
     tags: (item.tags || []).sort()
   };
   const str = JSON.stringify(relevantData);
@@ -208,32 +207,47 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 async function handleWebDAVRequest(request) {
   console.log('Background: handleWebDAVRequest 开始', request);
   
-  const { config, method, path = '', data = null } = request;
+  const { config, method, path = '', data = null, headers: customHeaders = {} } = request;
   const { serverUrl, username, password } = config;
 
-  console.log('Background: WebDAV请求', { method, path, serverUrl });
+  console.log('Background: WebDAV 请求', { method, path, serverUrl });
 
   if (!serverUrl || !username || !password) {
-    console.error('Background: WebDAV配置不完整');
-    return { success: false, error: 'WebDAV配置不完整' };
+    console.error('Background: WebDAV 配置不完整');
+    return { success: false, error: 'WebDAV 配置不完整' };
   }
 
-  const baseUrl = serverUrl.replace(/\/$/, '');
+  let baseUrl = serverUrl.trim();
+  
+  if (!/^https?:\/\//i.test(baseUrl)) {
+    console.warn('Background: URL scheme 错误，自动修正', baseUrl);
+    if (baseUrl.startsWith('htt://')) {
+      baseUrl = 'http' + baseUrl;
+    } else if (baseUrl.startsWith('http:')) {
+      baseUrl = 'http://' + baseUrl.substring(5);
+    } else {
+      baseUrl = 'http://' + baseUrl;
+    }
+    console.log('Background: 修正后的 URL', baseUrl);
+  }
+  
+  baseUrl = baseUrl.replace(/\/$/, '');
   const fullPath = path.startsWith('/') ? path : '/' + path;
   const url = baseUrl + fullPath;
 
   const credentials = btoa(`${username}:${password}`);
   const headers = {
-    'Authorization': `Basic ${credentials}`
+    'Authorization': `Basic ${credentials}`,
+    ...customHeaders
   };
 
-  if (method === 'PUT' || method === 'POST') {
+  if (method === 'PUT' || method === 'POST' || method === 'COPY' || method === 'MOVE') {
     headers['Content-Type'] = 'application/json';
   }
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(new DOMException('请求超时', 'TimeoutError')), 30000);
 
     const fetchOptions = {
       method: method,
@@ -241,28 +255,40 @@ async function handleWebDAVRequest(request) {
       signal: controller.signal
     };
 
-    if (data && (method === 'PUT' || method === 'POST')) {
+    if (data && (method === 'PUT' || method === 'POST' || method === 'COPY' || method === 'MOVE')) {
       fetchOptions.body = typeof data === 'string' ? data : JSON.stringify(data);
     }
 
-    console.log('Background: 发送fetch', url);
+    console.log('Background: 发送 fetch', url);
     const response = await fetch(url, fetchOptions);
     clearTimeout(timeoutId);
 
-    console.log('Background: fetch响应', response.status);
+    console.log('Background: fetch 响应', response.status);
 
-    if (method === 'GET') {
+    if (method === 'GET' || method === 'PROPFIND') {
       const responseData = await response.text();
-      return { success: response.ok, status: response.status, data: responseData };
+      return { 
+        success: response.ok || method === 'PROPFIND',
+        status: response.status,
+        data: responseData,
+        headers: Object.fromEntries(response.headers.entries())
+      };
+    } else if (method === 'HEAD') {
+      return { 
+        success: response.ok || response.status === 200,
+        status: response.status,
+        headers: Object.fromEntries(response.headers.entries())
+      };
     } else {
       return { 
-        success: response.ok || response.status === 201 || response.status === 204,
+        success: response.ok || response.status === 201 || response.status === 204 || response.status === 207,
         status: response.status,
-        statusText: response.statusText
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries())
       };
     }
   } catch (error) {
-    console.error('Background: fetch错误', error.name, error.message);
+    console.error('Background: fetch 错误', error.name, error.message);
     if (error.name === 'AbortError') {
       return { success: false, error: '请求超时' };
     }
@@ -405,24 +431,7 @@ class BackgroundService {
       if (area !== 'local') return;
       
       console.log('Background: storage变更', Object.keys(changes));
-      
-      // 记录 aiConfig 变更的详细信息
-      if (changes.aiConfig) {
-        console.log('Background: [AI_CONFIG_CHANGED] AI配置变更检测');
-        console.log('Background: [AI_CONFIG_CHANGED] 旧值:', changes.aiConfig.oldValue);
-        console.log('Background: [AI_CONFIG_CHANGED] 新值:', changes.aiConfig.newValue);
-        if (changes.aiConfig.newValue) {
-          console.log('Background: [AI_CONFIG_CHANGED] 新值详情:', {
-            enabled: changes.aiConfig.newValue.enabled,
-            provider: changes.aiConfig.newValue.provider,
-            apiKey: changes.aiConfig.newValue.apiKey ? `${changes.aiConfig.newValue.apiKey.substring(0, 4)}***` : '空',
-            apiKeyLength: changes.aiConfig.newValue.apiKey ? changes.aiConfig.newValue.apiKey.length : 0,
-            model: changes.aiConfig.newValue.model,
-            customModels: changes.aiConfig.newValue.customModels
-          });
-        }
-      }
-      
+
       // 更新配置
       if (changes.syncConfig) {
         this.syncConfig = changes.syncConfig.newValue;
@@ -582,34 +591,29 @@ class BackgroundService {
     try {
       const deviceId = await getOrCreateDeviceId();
       const localResult = await chrome.storage.local.get([
-        'items', 'tags', 'categories', 'settings', 'lastSyncTime', 
-        'deletedItems', 'deletedCategories', 'syncMeta', 'pendingChanges'
+        'items', 'tags', 'settings', 'lastSyncTime',
+        'deletedItems', 'syncMeta', 'pendingChanges'
       ]);
-      
+
       // 确保所有项目有版本号
       const items = (localResult.items || []).map(item => ({
         ...item,
         version: item.version || 1,
         checksum: item.checksum || calculateItemChecksum(item)
       }));
-      
+
       const deletedItems = cleanupOldTombstones(localResult.deletedItems || []);
-      const deletedCategories = localResult.deletedCategories || [];
-      
+
       syncLogger.log('SYNC', '本地数据状态', {
         items: items.length,
         deletedItems: deletedItems.length,
-        deletedCategories: deletedCategories.length,
-        deletedIds: deletedItems.map(t => ({ id: t.id, deletedAt: t.deletedAt })),
-        deletedCategoryNames: deletedCategories.map(c => c.name)
+        deletedIds: deletedItems.map(t => ({ id: t.id, deletedAt: t.deletedAt }))
       });
-      
+
       const localData = {
         items,
         deletedItems,
-        deletedCategories,
         tags: localResult.tags || [],
-        categories: localResult.categories || [],
         settings: localResult.settings || {},
         timestamp: localResult.lastSyncTime || 0
       };
@@ -620,23 +624,21 @@ class BackgroundService {
         syncLogger.log('SYNC', '远程数据下载成功', {
           hasData: !!remoteResult.data,
           hasItems: !!(remoteResult.data?.items || remoteResult.data?.data?.items),
-          hasDeletedItems: !!(remoteResult.data?.deletedItems || remoteResult.data?.data?.deletedItems),
-          hasDeletedCategories: !!(remoteResult.data?.deletedCategories || remoteResult.data?.data?.deletedCategories)
+          hasDeletedItems: !!(remoteResult.data?.deletedItems || remoteResult.data?.data?.deletedItems)
         });
-        
+
         // 执行增量合并
         const mergedData = await this.incrementalMerge(localData, remoteResult.data, deviceId);
-        
+
         // 上传合并后的数据
         const uploadResult = await this.directUpload(webdavConfig, mergedData);
-        
+
         if (uploadResult.success) {
           // 保存合并后的本地数据
           await this.saveMergedData(mergedData);
           syncLogger.log('SYNC', '增量同步完成', {
             items: mergedData.items.length,
-            deletedItems: mergedData.deletedItems.length,
-            deletedCategories: mergedData.deletedCategories.length
+            deletedItems: mergedData.deletedItems.length
           });
         } else {
           syncLogger.log('ERROR', '上传失败', { error: uploadResult.error });
@@ -672,57 +674,31 @@ class BackgroundService {
 
   // 增量合并算法
   async incrementalMerge(localData, remoteData, deviceId) {
-    let remoteItems, remoteDeletedItems, remoteDeletedCategories, remoteTags, remoteCategories, remoteSettings;
-    
+    let remoteItems, remoteDeletedItems, remoteTags, remoteSettings;
+
     if (remoteData.data && remoteData.data.items) {
       remoteItems = remoteData.data.items || [];
       remoteDeletedItems = remoteData.data.deletedItems || [];
-      remoteDeletedCategories = remoteData.data.deletedCategories || [];
       remoteTags = remoteData.data.tags || [];
-      remoteCategories = remoteData.data.categories || [];
       remoteSettings = remoteData.data.settings || {};
       syncLogger.log('MERGE', '解析为旧格式(v1.0)');
     } else if (remoteData.items) {
       remoteItems = remoteData.items || [];
       remoteDeletedItems = remoteData.deletedItems || [];
-      remoteDeletedCategories = remoteData.deletedCategories || [];
       remoteTags = remoteData.tags || [];
-      remoteCategories = remoteData.categories || [];
       remoteSettings = remoteData.settings || {};
       syncLogger.log('MERGE', '解析为新格式(v3.0)');
     } else {
       syncLogger.log('ERROR', '无法解析远程数据格式');
       remoteItems = [];
       remoteDeletedItems = [];
-      remoteDeletedCategories = [];
       remoteTags = [];
-      remoteCategories = [];
       remoteSettings = {};
     }
-    
+
     syncLogger.log('MERGE', '远程数据解析结果', {
       items: remoteItems.length,
-      deletedItems: remoteDeletedItems.length,
-      deletedCategories: remoteDeletedCategories.length
-    });
-
-    // 合并分类墓碑
-    const deletedCategoryMap = new Map();
-    (localData.deletedCategories || []).forEach(c => deletedCategoryMap.set(c.name, c));
-    remoteDeletedCategories.forEach(c => {
-      const existing = deletedCategoryMap.get(c.name);
-      if (!existing || new Date(c.deletedAt) > new Date(existing.deletedAt)) {
-        deletedCategoryMap.set(c.name, c);
-      }
-    });
-    const mergedDeletedCategories = Array.from(deletedCategoryMap.values());
-    const deletedCategoryNames = new Set(mergedDeletedCategories.map(c => c.name));
-    
-    syncLogger.log('MERGE', '分类墓碑合并', {
-      local: (localData.deletedCategories || []).length,
-      remote: remoteDeletedCategories.length,
-      merged: mergedDeletedCategories.length,
-      deletedNames: Array.from(deletedCategoryNames)
+      deletedItems: remoteDeletedItems.length
     });
 
     // 合并项目墓碑
@@ -736,7 +712,7 @@ class BackgroundService {
     });
     const mergedDeletedItems = Array.from(deletedMap.values());
     const deletedIds = new Set(mergedDeletedItems.map(t => t.id));
-    
+
     syncLogger.log('MERGE', '项目墓碑合并', {
       local: localData.deletedItems.length,
       remote: remoteDeletedItems.length,
@@ -797,17 +773,13 @@ class BackgroundService {
         }
       }
     });
-    
-    syncLogger.log('MERGE', '项目合并完成', { 
-      skippedByTombstone, 
+
+    syncLogger.log('MERGE', '项目合并完成', {
+      skippedByTombstone,
       finalCount: itemMap.size,
       localNewerCount,
       remoteNewerCount
     });
-
-    // 合并分类（过滤掉已删除的）
-    const mergedCategories = [...new Set([...localData.categories, ...remoteCategories])]
-      .filter(c => !deletedCategoryNames.has(c));
 
     // 合并标签
     const mergedTags = [...new Set([...localData.tags, ...remoteTags])];
@@ -829,44 +801,32 @@ class BackgroundService {
     const result = {
       items: Array.from(itemMap.values()),
       deletedItems: mergedDeletedItems,
-      deletedCategories: mergedDeletedCategories,
       tags: mergedTags,
-      categories: mergedCategories,
       settings: mergedSettings,
       timestamp: Date.now()
     };
-    
+
     syncLogger.log('MERGE', '合并最终结果', {
       items: result.items.length,
-      deletedItems: result.deletedItems.length,
-      deletedCategories: result.deletedCategories.length,
-      categories: result.categories.length
+      deletedItems: result.deletedItems.length
     });
-    
+
     return result;
   }
 
   // 保存合并后的数据
   async saveMergedData(mergedData) {
-    const aiConfigResult = await chrome.storage.local.get(['aiConfig']);
     const dataToSave = {
       items: mergedData.items,
       deletedItems: mergedData.deletedItems,
-      deletedCategories: mergedData.deletedCategories,
       tags: mergedData.tags,
-      categories: mergedData.categories,
       settings: mergedData.settings
     };
-    
-    if (aiConfigResult.aiConfig) {
-      dataToSave.aiConfig = aiConfigResult.aiConfig;
-    }
-    
+
     await chrome.storage.local.set(dataToSave);
     syncLogger.log('SAVE', '数据已保存', {
       items: mergedData.items.length,
-      deletedItems: mergedData.deletedItems.length,
-      deletedCategories: mergedData.deletedCategories.length
+      deletedItems: mergedData.deletedItems.length
     });
   }
   
@@ -895,7 +855,21 @@ class BackgroundService {
       pathsToTry.push(`/vol1/1000${cleanSyncPath.replace(`/${user}/`, '/')}/${cleanFilename}`);
     }
 
-    const baseUrl = serverUrl.replace(/\/$/, '');
+    let baseUrl = serverUrl.trim();
+    
+    if (!/^https?:\/\//i.test(baseUrl)) {
+      console.warn('Background downloadData: URL scheme 错误，自动修正', baseUrl);
+      if (baseUrl.startsWith('htt://')) {
+        baseUrl = 'http' + baseUrl;
+      } else if (baseUrl.startsWith('http:')) {
+        baseUrl = 'http://' + baseUrl.substring(5);
+      } else {
+        baseUrl = 'http://' + baseUrl;
+      }
+      console.log('Background downloadData: 修正后的URL', baseUrl);
+    }
+    
+    baseUrl = baseUrl.replace(/\/$/, '');
     const credentials = btoa(`${username}:${password}`);
     
     for (const filePath of pathsToTry) {
@@ -904,7 +878,7 @@ class BackgroundService {
       
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(new DOMException('请求超时', 'TimeoutError')), 15000);
 
         const response = await fetch(url, {
           method: 'GET',
@@ -965,17 +939,14 @@ class BackgroundService {
       },
       items: data.items || [],
       deletedItems: data.deletedItems || [],
-      deletedCategories: data.deletedCategories || [],
       tags: data.tags || [],
-      categories: data.categories || [],
       settings: data.settings || {},
       timestamp: Date.now()
     };
-    
+
     syncLogger.log('UPLOAD', '准备上传数据', {
       items: syncData.items.length,
       deletedItems: syncData.deletedItems.length,
-      deletedCategories: syncData.deletedCategories.length,
       version: syncData.version
     });
 
@@ -996,7 +967,21 @@ class BackgroundService {
       pathsToTry.push(`/vol1/1000${cleanSyncPath.replace(`/${username}/`, '/')}/${cleanFilename}`);
     }
 
-    const baseUrl = serverUrl.replace(/\/$/, '');
+    let baseUrl = serverUrl.trim();
+    
+    if (!/^https?:\/\//i.test(baseUrl)) {
+      console.warn('Background directUpload: URL scheme 错误，自动修正', baseUrl);
+      if (baseUrl.startsWith('htt://')) {
+        baseUrl = 'http' + baseUrl;
+      } else if (baseUrl.startsWith('http:')) {
+        baseUrl = 'http://' + baseUrl.substring(5);
+      } else {
+        baseUrl = 'http://' + baseUrl;
+      }
+      console.log('Background directUpload: 修正后的URL', baseUrl);
+    }
+    
+    baseUrl = baseUrl.replace(/\/$/, '');
     const credentials = btoa(`${username}:${password}`);
     
     for (const filePath of pathsToTry) {
@@ -1005,7 +990,7 @@ class BackgroundService {
       
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 15000);
+        const timeoutId = setTimeout(() => controller.abort(new DOMException('请求超时', 'TimeoutError')), 15000);
 
         const response = await fetch(url, {
           method: 'PUT',
@@ -1101,21 +1086,16 @@ class BackgroundService {
     }
 
     const hostname = new URL(url).hostname.toLowerCase();
-    const result = await chrome.storage.local.get(['settings', 'aiConfig']);
+    const result = await chrome.storage.local.get(['settings']);
     const settings = this.deepMerge(this.settings, result.settings || {});
     const blacklist = Array.isArray(settings.blacklist) ? settings.blacklist : [];
 
     if (!blacklist.includes(hostname)) {
       blacklist.push(hostname);
       settings.blacklist = blacklist;
-      
-      // 保存时保护aiConfig
-      const dataToSave = { settings };
-      if (result.aiConfig) {
-        dataToSave.aiConfig = result.aiConfig;
-      }
-      await chrome.storage.local.set(dataToSave);
-      
+
+      await chrome.storage.local.set({ settings });
+
       this.settings = settings;
       await this.notifyTabsToRefresh();
       chrome.notifications.create({
@@ -1201,7 +1181,6 @@ class BackgroundService {
         favicon: tab.favIconUrl,
         images: [imageUrl],
         imageInfo: imageInfo,
-        category: '图片',
         tags: ['图片'],
         clipType: 'image',
         createdAt: new Date().toISOString(),
@@ -1257,7 +1236,6 @@ class BackgroundService {
       title: selectedText.substring(0, 50) + (selectedText.length > 50 ? '...' : ''),
       content: selectedText,
       url: tab.url,
-      category: '未分类',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -1283,7 +1261,6 @@ class BackgroundService {
       type: 'prompt',
       title: selectedText.substring(0, 30) + (selectedText.length > 30 ? '...' : ''),
       content: selectedText,
-      category: '通用',
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString()
     };
@@ -1347,78 +1324,6 @@ class BackgroundService {
   }
 }
 
-// WebDAV客户端
-class WebDAVClient {
-  constructor(config) {
-    this.serverUrl = config.serverUrl || '';
-    this.username = config.username || '';
-    this.password = config.password || '';
-    this.syncPath = config.syncPath || '/notebook-sync/';
-    this.filename = config.filename || 'notebook-data.json';
-    this.enabled = config.enabled || false;
-  }
-
-  isConfigured() {
-    return this.enabled && this.serverUrl && this.username && this.password;
-  }
-
-  async uploadData(data) {
-    console.log('WebDAVClient: uploadData 开始', { serverUrl: this.serverUrl, enabled: this.enabled });
-    
-    if (!this.isConfigured()) {
-      console.log('WebDAVClient: 未配置');
-      return { success: false, error: 'WebDAV未配置' };
-    }
-
-    const syncData = {
-      version: '1.0',
-      timestamp: Date.now(),
-      data: data
-    };
-
-    const filePath = `${this.syncPath.replace(/\/$/, '')}/${this.filename}`;
-    console.log('WebDAVClient: 准备上传', filePath);
-    
-    try {
-      const result = await this.sendRequest('PUT', filePath, syncData);
-      console.log('WebDAVClient: 上传结果', result);
-      
-      if (result.success) {
-        return { success: true, path: filePath };
-      }
-      return { success: false, error: `上传失败: ${result.status || result.error || '未知错误'}` };
-    } catch (error) {
-      console.error('WebDAVClient: 上传异常', error);
-      return { success: false, error: error.message };
-    }
-  }
-
-  async sendRequest(method, path, data) {
-    console.log('WebDAVClient: sendRequest', { method, path });
-    return new Promise((resolve) => {
-      chrome.runtime.sendMessage({
-        action: 'webdav',
-        config: {
-          serverUrl: this.serverUrl,
-          username: this.username,
-          password: this.password
-        },
-        method: method,
-        path: path,
-        data: data
-      }, (result) => {
-        console.log('WebDAVClient: sendRequest 响应', { method, path, result });
-        if (chrome.runtime.lastError) {
-          console.error('WebDAVClient: sendRequest 错误', chrome.runtime.lastError);
-          resolve({ success: false, error: chrome.runtime.lastError.message });
-        } else {
-          resolve(result || { success: false, error: '无响应' });
-        }
-      });
-    });
-  }
-}
-
 // 初始化
 const backgroundService = new BackgroundService();
 
@@ -1429,8 +1334,7 @@ chrome.runtime.onInstalled.addListener((details) => {
     chrome.storage.local.set({
       items: [],
       settings: { injectMode: 'all', whitelist: [], blacklist: [] },
-      tags: [],
-      categories: ['通用', '编程', '写作', '翻译', '创意', '其他']
+      tags: []
     });
   }
 });

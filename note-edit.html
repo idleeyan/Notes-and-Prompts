@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>编辑笔记 - 笔记收藏与提示词管理器</title>
+  <link rel="stylesheet" href="lib/easymde.min.css">
+  <link rel="stylesheet" href="enhanced-editor.css">
+  <link rel="stylesheet" href="note-edit.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>编辑笔记</h1>
+      <div class="header-actions">
+        <button id="save-btn" class="btn btn-primary">保存</button>
+        <button id="close-btn" class="btn btn-secondary">关闭</button>
+      </div>
+    </header>
+
+    <div class="form-container">
+      <div class="form-row">
+        <div class="form-group form-group-title">
+          <label for="edit-title">标题</label>
+          <input type="text" id="edit-title" placeholder="笔记标题">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="edit-content">内容</label>
+        <textarea id="edit-content" placeholder="笔记内容..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>标签</label>
+        <div class="tags-input-container" id="tags-container">
+          <div class="tags-list" id="tags-list"></div>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="edit-source">来源</label>
+        <input type="text" id="edit-source" placeholder="笔记来源（可选）">
+      </div>
+
+      <div class="form-group" id="images-group" style="display: none;">
+        <label>图片</label>
+        <div class="images-grid" id="images-grid"></div>
+      </div>
+
+      <div class="meta-info" id="meta-info">
+        <!-- 创建时间、更新时间等 -->
+      </div>
+    </div>
+  </div>
+
+  <script src="lib/marked.min.js"></script>
+  <script src="lib/easymde.min.js"></script>
+  <script src="utils.js"></script>
+  <script src="enhancedEditor.js"></script>
+  <script src="tagEditor.js"></script>
+  <script src="dataManager.js"></script>
+  <script src="note-edit.js"></script>
+</body>
+</html>

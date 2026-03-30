@@ -13,7 +13,6 @@ class PopupManager {
     this.bindEvents();
 
     // 加载初始数据
-    this.loadCategories();
     this.renderPromptsList();
   }
 
@@ -21,9 +20,6 @@ class PopupManager {
   bindEvents() {
     // 搜索和筛选
     document.getElementById('search-prompt').addEventListener('input', () => {
-      this.renderPromptsList();
-    });
-    document.getElementById('filter-prompt-category').addEventListener('change', () => {
       this.renderPromptsList();
     });
 
@@ -46,15 +42,7 @@ class PopupManager {
         this.openNotesPage();
       });
     }
-    
-    // AI设置按钮
-    const aiSettingsBtn = document.getElementById('ai-settings-btn');
-    if (aiSettingsBtn) {
-      aiSettingsBtn.addEventListener('click', () => {
-        this.openAISettings();
-      });
-    }
- 
+
     // 收藏当前网页按钮
     const clipPageBtn = document.getElementById('clip-page-btn');
     if (clipPageBtn) {
@@ -64,26 +52,12 @@ class PopupManager {
     }
   }
 
-  // 加载分类到筛选器
-  loadCategories() {
-    const categories = dataManager.getAllCategories();
-
-    // 提示词分类
-    const promptSelect = document.getElementById('filter-prompt-category');
-    promptSelect.innerHTML = '<option value="all">全部分类</option>' +
-      categories.map(cat => `<option value="${cat}">${cat}</option>`).join('');
-  }
-
   // 渲染提示词列表
   renderPromptsList() {
     const container = document.getElementById('prompts-list');
     const searchTerm = document.getElementById('search-prompt').value;
-    const filterCategory = document.getElementById('filter-prompt-category').value;
 
-    const filters = { type: 'prompt' };
-    if (filterCategory !== 'all') filters.category = filterCategory;
-
-    const prompts = dataManager.searchItems(searchTerm, filters);
+    const prompts = dataManager.searchItems(searchTerm, { type: 'prompt' });
 
     if (prompts.length === 0) {
       container.innerHTML = `
@@ -102,7 +76,7 @@ class PopupManager {
   // 渲染项目卡片
   renderItemCard(item) {
     const isPrompt = item.type === 'prompt';
-    const metaInfo = isPrompt 
+    const metaInfo = isPrompt
       ? `<span>💡 提示词</span>`
       : `<img src="${item.favicon || ''}" alt="" onerror="this.style.display='none'"><span>${new URL(item.url || 'http://example.com').hostname}</span>`;
 
@@ -125,7 +99,6 @@ class PopupManager {
       <div class="item-card" data-id="${item.id}" data-type="${item.type}">
         <div class="item-header">
           <span class="item-title">${this.escapeHtml(item.title)}</span>
-          <span class="item-category">${this.escapeHtml(item.category)}</span>
         </div>
         ${imageHtml}
         <div class="item-content">${this.escapeHtml(item.excerpt || item.content)}</div>
@@ -237,13 +210,6 @@ class PopupManager {
   openNotesPage() {
     const notesUrl = chrome.runtime.getURL('notes.html');
     chrome.tabs.create({ url: notesUrl });
-  }
-  
-  // 打开AI设置页面
-  openAISettings() {
-    chrome.runtime.sendMessage({
-      action: 'openAISettings'
-    });
   }
   
   // HTML转义

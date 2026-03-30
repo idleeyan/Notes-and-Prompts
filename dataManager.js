@@ -3,7 +3,6 @@ class DataManager {
   constructor() {
     this.items = [];
     this.deletedItems = [];
-    this.deletedCategories = []; // 已删除分类的墓碑记录
     this.settings = {
       injectMode: 'all',
       whitelist: [],
@@ -21,7 +20,6 @@ class DataManager {
       }
     };
     this.tags = new Set();
-    this.categories = new Set(['通用', '编程', '写作', '翻译', '创意', '其他']);
     this.dataVersion = '3.0';
     this.syncManagerReady = false;
   }
@@ -60,7 +58,6 @@ class DataManager {
     const relevantData = {
       title: item.title || '',
       content: item.content || '',
-      category: item.category || '',
       tags: (item.tags || []).sort()
     };
     const str = JSON.stringify(relevantData);
@@ -74,42 +71,31 @@ class DataManager {
   }
 
   recordSyncChange(action, item) {
-    if (typeof incrementalSyncManager !== 'undefined') {
-      incrementalSyncManager.recordChange(action, item.type, item);
-    }
   }
 
   // 加载数据
   async loadData() {
     const result = await chrome.storage.local.get([
-      'items', 'settings', 'tags', 'categories', 'prompts', 'notes', 
-      'webdavConfig', 'deletedItems', 'deletedCategories'
+      'items', 'settings', 'tags', 'prompts', 'notes',
+      'webdavConfig', 'deletedItems'
     ]);
 
     this.items = Array.isArray(result.items) ? result.items : [];
     this.deletedItems = Array.isArray(result.deletedItems) ? result.deletedItems : [];
-    this.deletedCategories = Array.isArray(result.deletedCategories) ? result.deletedCategories : [];
-    
+
     console.log('DataManager: 加载数据', {
       items: this.items.length,
       deletedItems: this.deletedItems.length,
-      deletedCategories: this.deletedCategories.length,
-      deletedIds: this.deletedItems.map(t => t.id),
-      deletedCategoryNames: this.deletedCategories.map(c => c.name)
+      deletedIds: this.deletedItems.map(t => t.id)
     });
-    
+
     this.settings = this.deepMerge(this.settings, result.settings || {});
     if (result.webdavConfig) {
       this.settings.webdav = this.deepMerge(this.settings.webdav || {}, result.webdavConfig);
     }
     this.tags = new Set(result.tags || []);
-    
-    // 过滤掉已删除的分类
-    const deletedCategoryNames = new Set(this.deletedCategories.map(c => c.name));
-    const loadedCategories = result.categories || Array.from(this.categories);
-    this.categories = new Set(loadedCategories.filter(c => !deletedCategoryNames.has(c)));
 
-    this.extractTagsAndCategoriesFromItems();
+    this.extractTagsFromItems();
   }
 
   // 深度合并对象
@@ -140,8 +126,8 @@ class DataManager {
     return output;
   }
 
-  // 从现有项目中提取标签和分类
-  extractTagsAndCategoriesFromItems() {
+  // 从现有项目中提取标签
+  extractTagsFromItems() {
     this.items.forEach(item => {
       if (item.tags && Array.isArray(item.tags)) {
         item.tags.forEach(tag => {
@@ -149,9 +135,6 @@ class DataManager {
             this.tags.add(tag.trim());
           }
         });
-      }
-      if (item.category) {
-        this.categories.add(item.category);
       }
     });
   }
@@ -178,29 +161,23 @@ class DataManager {
 
   // 保存数据
   async saveData() {
-    const existing = await chrome.storage.local.get(['syncConfig', 'aiConfig', 'webdavConfig']);
-    
+    const existing = await chrome.storage.local.get(['syncConfig', 'webdavConfig']);
+
     const dataToSave = {
       items: this.items,
       deletedItems: this.deletedItems,
-      deletedCategories: this.deletedCategories,
       settings: this.settings,
-      tags: Array.from(this.tags),
-      categories: Array.from(this.categories)
+      tags: Array.from(this.tags)
     };
-    
+
     if (existing.syncConfig) {
       dataToSave.syncConfig = existing.syncConfig;
     }
-    
-    if (existing.aiConfig) {
-      dataToSave.aiConfig = existing.aiConfig;
-    }
-    
+
     if (existing.webdavConfig) {
       dataToSave.webdavConfig = existing.webdavConfig;
     }
-    
+
     await chrome.storage.local.set(dataToSave);
   }
 
@@ -213,7 +190,6 @@ class DataManager {
       type: 'prompt',
       title: data.title,
       content: data.content,
-      category: data.category || '通用',
       tags: data.tags ? [...data.tags] : [],
       previewImage: data.previewImage || '',
       generationInfo: data.generationInfo || null,
@@ -226,7 +202,6 @@ class DataManager {
 
     this.items.push(prompt);
     this.updateTags(prompt.tags);
-    this.updateCategories(prompt.category);
     this.recordSyncChange('create', prompt);
     await this.saveData();
     return prompt;
@@ -243,7 +218,7 @@ class DataManager {
     }
 
     const oldVersion = this.items[index].version || 1;
-    
+
     this.items[index] = {
       ...this.items[index],
       ...updateData,
@@ -253,7 +228,6 @@ class DataManager {
     this.items[index].checksum = this.calculateItemChecksum(this.items[index]);
 
     if (updateData.tags) this.updateTags(updateData.tags);
-    if (updateData.category) this.updateCategories(updateData.category);
     this.recordSyncChange('update', this.items[index]);
     await this.saveData();
     return this.items[index];
@@ -277,7 +251,6 @@ class DataManager {
       url: data.url || '',
       favicon: data.favicon || '',
       images: data.images ? [...data.images] : [],
-      category: data.category || '未分类',
       tags: data.tags ? [...data.tags] : [],
       clipType: data.clipType || 'text',
       remark: data.remark || '',
@@ -290,7 +263,6 @@ class DataManager {
 
     this.items.push(note);
     this.updateTags(note.tags);
-    this.updateCategories(note.category);
     this.recordSyncChange('create', note);
     await this.saveData();
     return note;
@@ -320,7 +292,6 @@ class DataManager {
     this.items[index].checksum = this.calculateItemChecksum(this.items[index]);
 
     if (updateData.tags) this.updateTags(updateData.tags);
-    if (updateData.category) this.updateCategories(updateData.category);
     this.recordSyncChange('update', this.items[index]);
     await this.saveData();
     return this.items[index];
@@ -378,38 +349,6 @@ class DataManager {
     return this.deletedItems.some(t => t.id === id);
   }
 
-  // 删除分类（记录墓碑）
-  async deleteCategory(category) {
-    // 将该分类下的所有项目改为"未分类"
-    this.items.forEach(item => {
-      if (item.category === category) {
-        item.category = '未分类';
-      }
-    });
-
-    // 从分类集合中删除
-    this.categories.delete(category);
-
-    // 添加到已删除分类的墓碑记录
-    this.deletedCategories.push({
-      name: category,
-      deletedAt: new Date().toISOString()
-    });
-
-    // 清理过期的分类墓碑记录（30天）
-    const thirtyDaysAgo = Date.now() - 30 * 24 * 60 * 60 * 1000;
-    this.deletedCategories = this.deletedCategories.filter(c =>
-      new Date(c.deletedAt).getTime() > thirtyDaysAgo
-    );
-
-    console.log('DataManager: 删除分类', {
-      category,
-      totalDeletedCategories: this.deletedCategories.length
-    });
-
-    await this.saveData();
-  }
-
   // 获取单个项目
   getItem(id) {
     return this.items.find(item => item.id === id);
@@ -418,37 +357,32 @@ class DataManager {
   // 搜索项目（支持提示词和笔记联合搜索）
   searchItems(query, filters = {}) {
     let results = this.items;
-    
+
     // 类型过滤
     if (filters.type) {
       results = results.filter(item => item.type === filters.type);
     }
-    
-    // 分类过滤
-    if (filters.category) {
-      results = results.filter(item => item.category === filters.category);
-    }
-    
+
     // 标签过滤
     if (filters.tags && filters.tags.length > 0) {
-      results = results.filter(item => 
+      results = results.filter(item =>
         filters.tags.some(tag => item.tags.includes(tag))
       );
     }
-    
+
     // 关键词搜索
     if (query) {
       const lowerQuery = query.toLowerCase();
-      results = results.filter(item => 
+      results = results.filter(item =>
         item.title.toLowerCase().includes(lowerQuery) ||
         item.content.toLowerCase().includes(lowerQuery) ||
         item.tags.some(tag => tag.toLowerCase().includes(lowerQuery))
       );
     }
-    
+
     // 按更新时间排序
     results.sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-    
+
     return results;
   }
 
@@ -463,11 +397,39 @@ class DataManager {
     }
   }
 
-  // 更新分类集合
-  updateCategories(category) {
-    if (category) {
-      this.categories.add(category);
+  extractKeywords(text, maxKeywords = 5) {
+    if (!text || typeof text !== 'string') return [];
+
+    const stopWords = new Set([
+      '的', '了', '是', '在', '我', '有', '和', '就', '不', '人', '都', '一', '一个',
+      '上', '也', '很', '到', '说', '要', '去', '你', '会', '着', '没有', '看', '好',
+      '自己', '这', '那', '它', '他', '她', '吗', '呢', '吧', '啊', '哦', '嗯', '噢',
+      '什么', '怎么', '这个', '那个', '这样', '那样', '如何', '为什么', '因为', '所以',
+      '如果', '虽然', '但是', '然而', '而且', '或者', '还是', '以及', '关于', '对于',
+      '从', '向', '对', '与', '和', '把', '被', '让', '给', '替', '按', '根据',
+      '年', '月', '日', '时', '分', '秒', '号', '期', '周', '次', '些', '种',
+      '可以', '能够', '应该', '必须', '需要', '可能', '一定', '大概', '也许',
+      '已经', '正在', '将要', '曾经', '刚才', '现在', '今天', '明天', '昨天',
+      '这里', '那里', '哪里', '哪个', '哪些', '怎样', '怎么样'
+    ]);
+
+    const wordFreq = new Map();
+    const cnCharRegex = /[\u4e00-\u9fa5]+/g;
+    let match;
+
+    while ((match = cnCharRegex.exec(text)) !== null) {
+      const word = match[0];
+      if (word.length >= 2 && word.length <= 6 && !stopWords.has(word)) {
+        wordFreq.set(word, (wordFreq.get(word) || 0) + 1);
+      }
     }
+
+    const words = Array.from(wordFreq.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, maxKeywords)
+      .map(([word]) => word);
+
+    return words;
   }
 
   // 获取所有标签
@@ -475,19 +437,12 @@ class DataManager {
     return Array.from(this.tags);
   }
 
-  // 获取所有分类
-  getAllCategories() {
-    return Array.from(this.categories);
-  }
-
   // 导出数据到固定文件夹
   async exportData() {
     const data = {
       items: this.items,
       deletedItems: this.deletedItems,
-      deletedCategories: this.deletedCategories,
       tags: Array.from(this.tags),
-      categories: Array.from(this.categories),
       settings: {
         injectMode: this.settings.injectMode,
         whitelist: this.settings.whitelist,
@@ -634,21 +589,7 @@ class DataManager {
       this.deletedItems = Array.from(localDeletedMap.values());
     }
 
-    // 合并分类墓碑记录
-    if (data.deletedCategories && Array.isArray(data.deletedCategories)) {
-      const localDeletedCatMap = new Map(this.deletedCategories.map(c => [c.name, c]));
-      data.deletedCategories.forEach(remoteCat => {
-        const localCat = localDeletedCatMap.get(remoteCat.name);
-        if (!localCat || new Date(remoteCat.deletedAt) > new Date(localCat.deletedAt)) {
-          localDeletedCatMap.set(remoteCat.name, remoteCat);
-        }
-      });
-      this.deletedCategories = Array.from(localDeletedCatMap.values());
-    }
-
-    // 创建已删除ID和分类集合
-    const deletedIds = new Set(this.deletedItems.map(t => t.id));
-    const deletedCategoryNames = new Set(this.deletedCategories.map(c => c.name));
+    // 创建已删除ID集合
 
     if (data.items && Array.isArray(data.items)) {
       const existingItemsMap = new Map(this.items.map(item => [item.id, item]));
@@ -689,13 +630,7 @@ class DataManager {
     if (data.tags && Array.isArray(data.tags)) {
       data.tags.forEach(tag => this.tags.add(tag));
     }
-    if (data.categories && Array.isArray(data.categories)) {
-      // 过滤掉已删除的分类
-      data.categories
-        .filter(cat => !deletedCategoryNames.has(cat))
-        .forEach(cat => this.categories.add(cat));
-    }
-    
+
     if (data.settings && typeof data.settings === 'object') {
       this.settings = this.deepMerge(this.settings, data.settings);
     }

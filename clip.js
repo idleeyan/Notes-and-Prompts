@@ -69,7 +69,6 @@ class ClipPage {
       document.getElementById('note-title').value = note.title;
       document.getElementById('note-url').value = note.url || '';
       document.getElementById('note-content').value = note.content || '';
-      document.getElementById('note-category').value = note.category || '未分类';
       document.getElementById('note-remark').value = note.remark || '';
 
       // 加载标签
@@ -325,11 +324,6 @@ class ClipPage {
       }
     });
 
-    // 分类选择
-    document.getElementById('note-category').addEventListener('change', () => {
-      document.getElementById('new-category').value = '';
-    });
-
     // 保存按钮
     document.getElementById('save-btn').addEventListener('click', () => {
       this.saveNote();
@@ -540,9 +534,6 @@ class ClipPage {
 
   // 保存笔记
   async saveNote() {
-    const categorySelect = document.getElementById('note-category');
-    const newCategory = document.getElementById('new-category').value.trim();
-    const category = newCategory || categorySelect.value;
     let title = document.getElementById('note-title').value.trim();
     const content = document.getElementById('note-content').value.trim();
     const remark = document.getElementById('note-remark').value.trim();
@@ -568,7 +559,6 @@ class ClipPage {
           content: content,
           excerpt: content.substring(0, 200) + (content.length > 200 ? '...' : ''),
           url: document.getElementById('note-url').value.trim() || existingNote.url,
-          category,
           tags: this.currentTags,
           images: Array.from(this.selectedImages),
           remark,
@@ -581,7 +571,6 @@ class ClipPage {
           dataManager.items[index] = updatedNote;
           // 更新标签集合
           dataManager.updateTags(this.currentTags);
-          dataManager.updateCategories(category);
           await dataManager.saveData();
           this.showToast('收藏已更新！', 'success');
         }
@@ -589,7 +578,7 @@ class ClipPage {
         // 新建模式：添加新笔记
         // 如果有选中的图片，在内容后面添加图片引用
         let finalContent = content;
-        
+
         if (selectedImagesArray.length > 0) {
           // 如果内容不为空，先换行
           if (finalContent) {
@@ -598,10 +587,10 @@ class ClipPage {
           // 添加图片引用
           finalContent += selectedImagesArray.map(url => `![图片](${url})`).join('\n\n');
         }
-        
+
         const finalExcerpt = content.substring(0, 200) + (content.length > 200 ? '...' : '') ||
                             (selectedImagesArray.length > 0 ? `[${selectedImagesArray.length}张图片]` : '');
-        
+
         const noteData = {
           title,
           content: finalContent,
@@ -609,7 +598,6 @@ class ClipPage {
           url: this.pageInfo.url,
           favicon: this.pageInfo.favicon,
           images: selectedImagesArray,
-          category,
           tags: this.currentTags,
           clipType: this.detectedContentType,
           remark

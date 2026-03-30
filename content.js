@@ -50,31 +50,121 @@ class ContentScript {
         blacklist: result.settings.blacklist || [],
         blockedInputs: result.settings.blockedInputs || {}
       };
+      
+      // 数据迁移：将旧格式的本地地址（不含端口）转换为通配符格式
+      this.settings.blockedInputs = this.migrateBlockedInputs(this.settings.blockedInputs);
+    }
+  }
+  
+  // 迁移旧的 blockedInputs 格式
+  migrateBlockedInputs(blockedInputs) {
+    if (!blockedInputs) return {};
+    
+    const migrated = {};
+    let needsMigration = false;
+    
+    for (const [host, inputs] of Object.entries(blockedInputs)) {
+      // 检查是否是本地地址且不含端口
+      if ((host === 'localhost' || host === '127.0.0.1') && !host.includes(':')) {
+        // 转换为通配符格式
+        migrated[`${host}:*`] = inputs;
+        needsMigration = true;
+        console.log(`提示词管理器：迁移屏蔽列表 ${host} -> ${host}:*`);
+      } else {
+        migrated[host] = inputs;
+      }
+    }
+    
+    // 如果有迁移，异步保存新格式
+    if (needsMigration) {
+      this.saveMigratedBlockedInputs(migrated);
+    }
+    
+    return migrated;
+  }
+  
+  // 保存迁移后的屏蔽列表
+  async saveMigratedBlockedInputs(migrated) {
+    try {
+      this.settings.blockedInputs = migrated;
+      await chrome.storage.local.set({ settings: this.settings });
+      console.log('提示词管理器：屏蔽列表迁移完成');
+    } catch (error) {
+      console.error('提示词管理器：屏蔽列表迁移失败', error);
     }
   }
 
   // 检查当前网站是否允许注入
   isCurrentSiteAllowed() {
-    const currentHost = window.location.hostname.toLowerCase();
+    const siteId = this.getSiteIdentifier();
     const { injectMode, whitelist, blacklist } = this.settings;
 
     switch (injectMode) {
       case 'whitelist':
-        return whitelist.some(domain => 
-          currentHost === domain.toLowerCase() || 
-          currentHost.endsWith('.' + domain.toLowerCase())
-        );
+        return this.matchesSiteList(siteId, whitelist);
       
       case 'blacklist':
-        return !blacklist.some(domain => 
-          currentHost === domain.toLowerCase() || 
-          currentHost.endsWith('.' + domain.toLowerCase())
-        );
+        return !this.matchesSiteList(siteId, blacklist);
       
       case 'all':
       default:
         return true;
     }
+  }
+
+  // 获取完整的站点标识（包含端口）
+  getSiteIdentifier() {
+    const host = window.location.hostname.toLowerCase();
+    const port = window.location.port;
+    
+    // 对于 localhost 和 127.0.0.1，包含端口号
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return `${host}:${port || this.getDefaultPort()}`;
+    }
+    
+    // 其他域名不包含端口
+    return host;
+  }
+
+  // 获取默认端口
+  getDefaultPort() {
+    switch (window.location.protocol) {
+      case 'https:': return '443';
+      case 'http:': return '80';
+      default: return '';
+    }
+  }
+
+  // 清理 URL，去除 http/https 前缀和路径
+  cleanUrl(url) {
+    if (!url) return url;
+    return url
+      .toLowerCase()
+      .replace(/^(https?:\/\/)?/, '') // 去除 http:// 或 https:// 前缀
+      .replace(/\/.*$/, ''); // 去除路径部分
+  }
+
+  // 站点匹配逻辑（支持端口通配符）
+  matchesSiteList(siteId, list) {
+    return list.some(pattern => {
+      // 清理输入的 pattern
+      const cleanPattern = this.cleanUrl(pattern);
+      
+      // 支持通配符: 127.0.0.1:* 匹配所有端口
+      if (cleanPattern.includes(':*')) {
+        const baseHost = cleanPattern.replace(':*', '');
+        return siteId.startsWith(baseHost + ':');
+      }
+      
+      // 精确匹配: 127.0.0.1:3000
+      if (cleanPattern.includes(':')) {
+        return siteId === cleanPattern;
+      }
+      
+      // 域名匹配（不含端口）
+      const siteHost = siteId.split(':')[0];
+      return siteHost === cleanPattern || siteHost.endsWith('.' + cleanPattern);
+    });
   }
 
   // 设置消息监听
@@ -628,15 +718,28 @@ class ContentScript {
   
   // 获取当前网站的屏蔽列表
   getBlockedInputsForCurrentSite() {
-    const hostname = window.location.hostname;
+    const siteId = this.getSiteIdentifier();
     const blockedData = this.settings.blockedInputs || {};
-    const blockedList = blockedData[hostname] || [];
+    
+    // 先尝试精确匹配（含端口）
+    let blockedList = blockedData[siteId] || [];
+    
+    // 如果精确匹配没找到，且是本地地址，尝试匹配通配符
+    if (blockedList.length === 0) {
+      const host = window.location.hostname.toLowerCase();
+      const wildcardKey = `${host}:*`;
+      if (blockedData[wildcardKey]) {
+        blockedList = blockedData[wildcardKey];
+      } else if (blockedData[host]) {
+        // 兼容旧数据格式
+        blockedList = blockedData[host];
+      }
+    }
     
     console.log('提示词管理器：当前网站屏蔽列表', { 
-      hostname, 
+      siteId, 
       blockedCount: blockedList.length,
-      blockedInputs: blockedList,
-      allBlockedData: blockedData 
+      blockedInputs: blockedList
     });
     
     return blockedList;
@@ -768,32 +871,26 @@ class ContentScript {
   
   // 屏蔽输入框
   async blockInput(input) {
-    const hostname = window.location.hostname;
+    const siteId = this.getSiteIdentifier();
     const inputId = this.getInputIdentifier(input);
     
-    console.log('提示词管理器：准备屏蔽输入框', { hostname, inputId });
+    console.log('提示词管理器：准备屏蔽输入框', { siteId, inputId });
     
     // 获取现有屏蔽列表
     const blockedData = this.settings.blockedInputs || {};
-    if (!blockedData[hostname]) {
-      blockedData[hostname] = [];
+    if (!blockedData[siteId]) {
+      blockedData[siteId] = [];
     }
     
     // 添加到屏蔽列表
-    if (!blockedData[hostname].includes(inputId)) {
-      blockedData[hostname].push(inputId);
+    if (!blockedData[siteId].includes(inputId)) {
+      blockedData[siteId].push(inputId);
       
       // 保存设置
       this.settings.blockedInputs = blockedData;
-      
+
       try {
-        // 获取并保护aiConfig
-        const result = await chrome.storage.local.get(['aiConfig']);
-        const dataToSave = { settings: this.settings };
-        if (result.aiConfig) {
-          dataToSave.aiConfig = result.aiConfig;
-        }
-        await chrome.storage.local.set(dataToSave);
+        await chrome.storage.local.set({ settings: this.settings });
         console.log('提示词管理器：屏蔽设置已保存', this.settings);
         
         // 移除已注入的按钮
@@ -865,15 +962,6 @@ class ContentScript {
       return;
     }
 
-    // 按分类分组
-    const categories = {};
-    prompts.forEach(prompt => {
-      if (!categories[prompt.category]) {
-        categories[prompt.category] = [];
-      }
-      categories[prompt.category].push(prompt);
-    });
-
     selector.innerHTML = `
       <div class="prompt-selector-content">
         <div class="prompt-selector-header">
@@ -881,15 +969,10 @@ class ContentScript {
           <button class="prompt-selector-close">&times;</button>
         </div>
         <div class="prompt-selector-body">
-          ${Object.entries(categories).map(([category, categoryPrompts]) => `
-            <div class="prompt-category-group">
-              <div class="prompt-category-title">${category}</div>
-              ${categoryPrompts.map(prompt => `
-                <div class="prompt-item-select" data-content="${this.escapeHtml(prompt.content)}">
-                  <div class="prompt-item-title">${this.escapeHtml(prompt.title)}</div>
-                  <div class="prompt-item-preview">${this.escapeHtml(prompt.content.substring(0, 50))}...</div>
-                </div>
-              `).join('')}
+          ${prompts.map(prompt => `
+            <div class="prompt-item-select" data-content="${this.escapeHtml(prompt.content)}">
+              <div class="prompt-item-title">${this.escapeHtml(prompt.title)}</div>
+              <div class="prompt-item-preview">${this.escapeHtml(prompt.content.substring(0, 50))}...</div>
             </div>
           `).join('')}
         </div>
