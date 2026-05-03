@@ -30,11 +30,7 @@ class NotesSettings {
   }
 
   cleanUrl(url) {
-    if (!url) return url;
-    return url
-      .toLowerCase()
-      .replace(/^(https?:\/\/)?/, '')
-      .replace(/\/.*$/, '');
+    return Utils.cleanUrl(url);
   }
 
   async saveSettings() {

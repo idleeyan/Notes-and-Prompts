@@ -166,6 +166,37 @@ body {
   color: white;
 }
 
+.tag-filter-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 10px;
+  background: var(--active-bg);
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.tag-filter-badge {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--primary);
+}
+
+.tag-filter-clear {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+
+.tag-filter-clear:hover {
+  background: var(--hover-bg);
+  color: var(--text);
+}
+
 /* 侧边栏底部 */
 .sidebar-footer {
   padding: 16px;
@@ -1133,6 +1164,48 @@ body {
   padding: 16px;
   display: flex;
   gap: 12px;
+}
+
+.image-viewer-nav {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 50px;
+  height: 50px;
+  border: none;
+  background: rgba(255, 255, 255, 0.15);
+  color: white;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.image-viewer-nav:hover {
+  background: rgba(255, 255, 255, 0.3);
+}
+
+.image-viewer-nav.prev {
+  left: 20px;
+}
+
+.image-viewer-nav.next {
+  right: 20px;
+}
+
+.image-viewer-counter {
+  position: absolute;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 14px;
 }
 
 /* 设置页面特定样式 */

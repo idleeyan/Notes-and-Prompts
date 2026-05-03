@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>编辑提示词 - 提示词管理器</title>
+  <link rel="stylesheet" href="lib/easymde.min.css">
+  <link rel="stylesheet" href="edit.css">
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>编辑提示词</h1>
+    </header>
+
+    <div class="form-container">
+      <div class="form-group">
+        <label for="edit-category">分类</label>
+        <select id="edit-category">
+          <option value="通用">通用</option>
+          <option value="编程">编程</option>
+          <option value="写作">写作</option>
+          <option value="翻译">翻译</option>
+          <option value="创意">创意</option>
+          <option value="其他">其他</option>
+        </select>
+        <input type="text" id="edit-new-category" placeholder="或输入新分类" style="margin-top: 8px;">
+      </div>
+
+      <div class="form-group">
+        <label for="edit-title">标题</label>
+        <input type="text" id="edit-title" placeholder="输入提示词标题">
+      </div>
+
+      <div class="form-group">
+        <label for="edit-prompt">提示词内容</label>
+        <textarea id="edit-prompt" placeholder="输入提示词内容..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>创建时间</label>
+        <div id="created-at" class="info-text">-</div>
+      </div>
+
+      <div class="form-group">
+        <label>最后更新</label>
+        <div id="updated-at" class="info-text">-</div>
+      </div>
+
+      <div class="button-group">
+        <button id="save-btn" class="btn btn-primary">保存修改</button>
+        <button id="cancel-btn" class="btn btn-secondary">取消</button>
+      </div>
+    </div>
+  </div>
+
+   <script src="lib/easymde.min.js"></script>
+   <script src="imageManager.js"></script>
+   <script src="dataManager.js"></script>
+   <script src="incrementalSyncManager.js"></script>
+   <script src="aiConfigManager.js"></script>
+   <script src="aiServiceManager.js"></script>
+   <script src="aiOperationManager.js"></script>
+   <script src="edit.js"></script>
+</body>
+</html>

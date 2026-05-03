@@ -65,30 +65,7 @@ class WebDAVConfigManager {
 
   // 深度合并对象
   deepMerge(target, source) {
-    if (!source || typeof source !== 'object' || Array.isArray(source)) {
-      return source;
-    }
-    
-    const output = { ...target };
-    
-    for (const key in source) {
-      if (source.hasOwnProperty(key)) {
-        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-          // 如果 source[key] 是对象且 target[key] 也是对象，则递归合并
-          if (target[key] && typeof target[key] === 'object') {
-            output[key] = this.deepMerge(target[key], source[key]);
-          } else {
-            // 否则直接使用 source[key]
-            output[key] = source[key];
-          }
-        } else {
-          // 基本类型直接赋值
-          output[key] = source[key];
-        }
-      }
-    }
-    
-    return output;
+    return Utils.deepMerge(target, source);
   }
 }
 

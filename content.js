@@ -137,11 +137,7 @@ class ContentScript {
 
   // 清理 URL，去除 http/https 前缀和路径
   cleanUrl(url) {
-    if (!url) return url;
-    return url
-      .toLowerCase()
-      .replace(/^(https?:\/\/)?/, '') // 去除 http:// 或 https:// 前缀
-      .replace(/\/.*$/, ''); // 去除路径部分
+    return Utils.cleanUrl(url);
   }
 
   // 站点匹配逻辑（支持端口通配符）
@@ -919,27 +915,7 @@ class ContentScript {
 
   // 显示提示
   showToast(message) {
-    const toast = document.createElement('div');
-    toast.style.cssText = `
-      position: fixed;
-      bottom: 20px;
-      left: 50%;
-      transform: translateX(-50%);
-      background: #333;
-      color: white;
-      padding: 10px 20px;
-      border-radius: 6px;
-      font-size: 14px;
-      z-index: 99999;
-      animation: fadeInUp 0.3s ease;
-    `;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-    
-    setTimeout(() => {
-      toast.style.animation = 'fadeOut 0.3s ease';
-      setTimeout(() => toast.remove(), 300);
-    }, 2000);
+    Utils.showToast(message);
   }
 
   // 打开提示词选择器
@@ -1109,10 +1085,7 @@ class ContentScript {
 
   // HTML转义
   escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return Utils.escapeHtml(text);
   }
 }
 

@@ -1,10 +1,11 @@
 {
   "manifest_version": 3,
   "name": "笔记收藏与提示词管理器",
-  "version": "3.13.2",
+  "version": "3.15.3",
   "description": "全面的笔记收藏与提示词管理系统，支持标签管理和统一搜索",
   "permissions": [
     "storage",
+    "unlimitedStorage",
     "activeTab",
     "scripting",
     "downloads",
@@ -32,7 +33,7 @@
   "content_scripts": [
     {
       "matches": ["<all_urls>"],
-      "js": ["content.js"],
+      "js": ["utils.js", "content.js"],
       "css": ["content.css"]
     }
   ],
@@ -50,6 +51,7 @@
         "note-edit.html", "note-edit.css", "note-edit.js",
         "prompt-edit.html", "prompt-edit.css", "prompt-edit.js",
         "dataManager.js",
+        "imageManager.js",
         "lib/easymde.min.css", "lib/easymde.min.js",
         "lib/marked.min.js",
         "tagEditor.js",

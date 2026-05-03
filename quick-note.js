@@ -216,20 +216,11 @@ class QuickNotePage {
 
   // 显示提示
   showToast(message, type = 'success') {
-    // 移除已有的提示
     const existingToast = document.querySelector('.toast');
     if (existingToast) {
       existingToast.remove();
     }
-
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-      toast.remove();
-    }, 3000);
+    Utils.showToast(message, type);
   }
 }
 

@@ -5,6 +5,7 @@ class NotesManager {
     this.items = [];
     this.filteredItems = [];
     this.currentTag = null;
+    this.tagFilterMode = false;  // 标签筛选模式：显示所有类型的匹配项
     this.searchQuery = '';
     this.sortBy = 'newest';
     this.viewMode = 'list';
@@ -74,7 +75,12 @@ class NotesManager {
   }
 
   loadItems() {
-    if (this.currentType === 'notes') {
+    // 标签筛选模式下，加载所有类型
+    if (this.tagFilterMode) {
+      this.items = dataManager.items.filter(item => 
+        (item.type === 'note' || item.type === 'prompt') && item.tags && item.tags.includes(this.currentTag)
+      );
+    } else if (this.currentType === 'notes') {
       this.items = dataManager.items.filter(item => 
         item.type === 'note' && item.clipType !== 'sticky'
       );
@@ -358,6 +364,7 @@ class NotesManager {
   switchType(type) {
     this.currentType = type;
     this.currentTag = null;
+    this.tagFilterMode = false;
     this.searchQuery = '';
     document.getElementById('search-input').value = '';
 
@@ -388,8 +395,16 @@ class NotesManager {
   }
 
   selectTag(tag) {
-    this.currentTag = this.currentTag === tag ? null : tag;
-    this.applyFilters();
+    // 标签筛选模式：显示所有包含该标签的笔记、便签、提示词
+    if (this.currentTag === tag) {
+      // 再次点击同一个标签，退出标签筛选模式
+      this.currentTag = null;
+      this.tagFilterMode = false;
+    } else {
+      this.currentTag = tag;
+      this.tagFilterMode = true;
+    }
+    this.loadItems();  // 重新加载所有类型的匹配项
     this.ui.renderTagCloud();
     this.ui.renderItems();
   }
@@ -427,28 +442,15 @@ class NotesManager {
   }
 
   escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return Utils.escapeHtml(text);
   }
 
   stripHtml(html) {
-    if (!html) return '';
-    const div = document.createElement('div');
-    div.innerHTML = html;
-    return div.textContent || div.innerText || '';
+    return Utils.stripHtml(html);
   }
 
   showToast(message) {
-    const toast = document.createElement('div');
-    toast.className = 'toast';
-    toast.textContent = message;
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-      toast.remove();
-    }, 3000);
+    Utils.showToast(message);
   }
 
   openNote(id) {
@@ -461,6 +463,17 @@ class NotesManager {
 
   openImageViewer(imageSrc, noteId) {
     this.ui.openImageViewer(imageSrc, noteId);
+  }
+
+  updateTagFilterIndicator() {
+    const newItemBtn = document.getElementById('new-item-btn');
+    if (this.tagFilterMode) {
+      if (newItemBtn) newItemBtn.style.display = 'none';
+    } else {
+      if (this.currentType !== 'gallery') {
+        if (newItemBtn) newItemBtn.style.display = 'flex';
+      }
+    }
   }
 }
 

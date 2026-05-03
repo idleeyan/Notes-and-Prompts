@@ -9,6 +9,7 @@ class NotesUI {
     this.renderItems();
     this.manager.updateCounts();
     this.manager.updateViewToggle();
+    this.manager.updateTagFilterIndicator();
   }
 
   renderTagCloud() {
@@ -22,7 +23,18 @@ class NotesUI {
       return;
     }
 
-    container.innerHTML = tags.map(tag => {
+    // 标签筛选模式下额外显示一个"清除筛选"按钮
+    let headerHtml = '';
+    if (this.manager.tagFilterMode) {
+      headerHtml = `
+        <div class="tag-filter-indicator">
+          <span class="tag-filter-badge">标签筛选: ${this.manager.escapeHtml(this.manager.currentTag)}</span>
+          <button class="tag-filter-clear" id="clear-tag-filter">✕ 清除</button>
+        </div>
+      `;
+    }
+
+    const tagsHtml = tags.map(tag => {
       const escapedTag = this.manager.escapeHtml(tag);
       return `
         <span class="tag-item ${this.manager.currentTag === tag ? 'active' : ''}" data-tag="${escapedTag}">
@@ -30,6 +42,16 @@ class NotesUI {
         </span>
       `;
     }).join('');
+
+    container.innerHTML = headerHtml + tagsHtml;
+
+    // 绑定清除按钮
+    const clearBtn = document.getElementById('clear-tag-filter');
+    if (clearBtn) {
+      clearBtn.addEventListener('click', () => {
+        this.manager.selectTag(this.manager.currentTag);
+      });
+    }
 
     container.querySelectorAll('.tag-item').forEach(tag => {
       tag.addEventListener('click', () => {
@@ -71,6 +93,35 @@ class NotesUI {
     }
 
     container.className = this.manager.viewMode === 'grid' ? 'notes-grid' : 'notes-list';
+
+    // 标签筛选模式下，根据每项的实际类型渲染
+    if (this.manager.tagFilterMode) {
+      container.innerHTML = this.manager.filteredItems.map(item => {
+        if (item.clipType === 'sticky') {
+          return this.createStickyCard(item);
+        } else if (item.type === 'prompt') {
+          return this.createPromptCard(item);
+        } else {
+          return this.createNoteCard(item);
+        }
+      }).join('');
+
+      container.querySelectorAll('.note-card, .prompt-card, .sticky-card').forEach(card => {
+        card.addEventListener('click', () => {
+          const id = card.dataset.id;
+          // 判断类型
+          const item = this.manager.filteredItems.find(i => i.id === id);
+          if (item) {
+            if (item.type === 'prompt') {
+              this.manager.openPrompt(id);
+            } else {
+              this.manager.openNote(id);
+            }
+          }
+        });
+      });
+      return;
+    }
 
     container.innerHTML = this.manager.filteredItems.map(item => {
       if (this.manager.currentType === 'notes') {
@@ -222,34 +273,62 @@ class NotesUI {
   }
 
   openImageViewer(imageSrc, noteId) {
+    // 获取当前笔记的所有图片
+    const note = dataManager.getItem(noteId);
+    const images = note && note.images ? note.images : [imageSrc];
+    const currentIndex = images.indexOf(imageSrc);
+    
     const modal = document.createElement('div');
     modal.className = 'modal image-viewer-modal active';
-    modal.innerHTML = `
-      <div class="modal-content image-viewer-content">
-        <button class="image-viewer-close">&times;</button>
-        <img src="${this.manager.escapeHtml(imageSrc)}" alt="查看图片">
-        <div class="image-viewer-actions">
-          <button class="btn btn-primary" id="view-source-note">查看来源笔记</button>
-          <button class="btn btn-secondary" id="close-image-viewer">关闭</button>
-        </div>
-      </div>
-    `;
     document.body.appendChild(modal);
 
-    modal.querySelector('.image-viewer-close').addEventListener('click', () => {
-      modal.remove();
-    });
-    modal.querySelector('#close-image-viewer').addEventListener('click', () => {
-      modal.remove();
-    });
+    const updateViewer = (index) => {
+      const img = images[index];
+      modal.innerHTML = `
+        <div class="modal-content image-viewer-content">
+          <button class="image-viewer-close">&times;</button>
+          ${index > 0 ? '<button class="image-viewer-nav prev" id="prev-image">❮</button>' : ''}
+          ${index < images.length - 1 ? '<button class="image-viewer-nav next" id="next-image">❯</button>' : ''}
+          <img src="${this.manager.escapeHtml(img)}" alt="查看图片">
+          <div class="image-viewer-counter">${index + 1} / ${images.length}</div>
+          <div class="image-viewer-actions">
+            <button class="btn btn-primary" id="view-source-note">查看来源笔记</button>
+            <button class="btn btn-secondary" id="close-image-viewer">关闭</button>
+          </div>
+        </div>
+      `;
+      
+      // 绑定事件
+      modal.querySelector('.image-viewer-close').addEventListener('click', () => modal.remove());
+      modal.querySelector('#close-image-viewer').addEventListener('click', () => modal.remove());
+      modal.querySelector('#view-source-note').addEventListener('click', () => {
+        modal.remove();
+        this.manager.openNote(noteId);
+      });
+      
+      if (index > 0) {
+        modal.querySelector('#prev-image').addEventListener('click', () => updateViewer(index - 1));
+      }
+      if (index < images.length - 1) {
+        modal.querySelector('#next-image').addEventListener('click', () => updateViewer(index + 1));
+      }
+    };
+
+    updateViewer(currentIndex);
+
+    // 点击背景关闭
     modal.addEventListener('click', (e) => {
       if (e.target === modal) modal.remove();
     });
 
-    modal.querySelector('#view-source-note').addEventListener('click', () => {
-      modal.remove();
-      this.manager.openNote(noteId);
-    });
+    // 键盘导航
+    const handleKeydown = (e) => {
+      if (e.key === 'Escape') modal.remove();
+      if (e.key === 'ArrowLeft' && currentIndex > 0) updateViewer(currentIndex - 1);
+      if (e.key === 'ArrowRight' && currentIndex < images.length - 1) updateViewer(currentIndex + 1);
+    };
+    document.addEventListener('keydown', handleKeydown);
+    modal.addEventListener('remove', () => document.removeEventListener('keydown', handleKeydown));
   }
 }
 

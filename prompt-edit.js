@@ -175,17 +175,68 @@ class PromptEditPage {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const dataUrl = e.target.result;
-      document.getElementById('edit-preview-image').value = dataUrl;
-      this.updatePreviewImageDisplay(dataUrl);
-      this.previewImage = dataUrl;
-    };
-    reader.onerror = () => {
-      this.showToast('图片读取失败', 'error');
-    };
-    reader.readAsDataURL(file);
+    // 压缩图片以避免存储配额超限
+    this.compressImage(file, 800, 0.85)
+      .then(dataUrl => {
+        document.getElementById('edit-preview-image').value = dataUrl;
+        this.updatePreviewImageDisplay(dataUrl);
+        this.previewImage = dataUrl;
+      })
+      .catch(() => {
+        // 如果压缩失败，回退到原始方式
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const dataUrl = e.target.result;
+          document.getElementById('edit-preview-image').value = dataUrl;
+          this.updatePreviewImageDisplay(dataUrl);
+          this.previewImage = dataUrl;
+        };
+        reader.onerror = () => {
+          this.showToast('图片读取失败', 'error');
+        };
+        reader.readAsDataURL(file);
+      });
+  }
+
+  // 压缩图片
+  compressImage(file, maxWidth = 800, quality = 0.85) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          // 如果图片已经很小，直接使用
+          if (img.width <= maxWidth && file.size < 500 * 1024) {
+            resolve(e.target.result);
+            return;
+          }
+
+          const canvas = document.createElement('canvas');
+          let width = img.width;
+          let height = img.height;
+
+          // 等比例缩放
+          if (width > maxWidth) {
+            height = Math.round(height * (maxWidth / width));
+            width = maxWidth;
+          }
+
+          canvas.width = width;
+          canvas.height = height;
+
+          const ctx = canvas.getContext('2d');
+          ctx.drawImage(img, 0, 0, width, height);
+
+          // 转换为 JPEG 以减小体积
+          const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
+          resolve(compressedDataUrl);
+        };
+        img.onerror = () => reject(new Error('图片加载失败'));
+        img.src = e.target.result;
+      };
+      reader.onerror = () => reject(new Error('文件读取失败'));
+      reader.readAsDataURL(file);
+    });
   }
 
   bindEvents() {
@@ -358,24 +409,13 @@ class PromptEditPage {
   }
 
   escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+    return Utils.escapeHtml(text);
   }
 
   showToast(message, type = 'info') {
     const existing = document.querySelector('.toast');
     if (existing) existing.remove();
-
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-      toast.remove();
-    }, 3000);
+    Utils.showToast(message, type);
   }
 }
 

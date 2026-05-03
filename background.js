@@ -57,6 +57,354 @@ self.addEventListener('unhandledrejection', (e) => {
 
 syncLogger.log('SYSTEM', 'Background脚本开始加载');
 
+const BG_IMG_KEY_PREFIX = 'img_';
+const BG_IMG_META_PREFIX = 'itemImgMeta_';
+
+function isLargeImageData(str) {
+  return typeof str === 'string' && str.startsWith('data:image/');
+}
+
+function bgGetImageKey(itemId, index) {
+  return BG_IMG_KEY_PREFIX + itemId + '_' + index;
+}
+
+function bgGetPreviewImageKey(itemId) {
+  return BG_IMG_KEY_PREFIX + itemId + '_preview';
+}
+
+function bgGetImageMetaKey(itemId) {
+  return BG_IMG_META_PREFIX + itemId;
+}
+
+function bgStripImagesFromItem(item) {
+  const stripped = { ...item };
+  if (stripped.images && Array.isArray(stripped.images)) {
+    const hasLarge = stripped.images.some(img => isLargeImageData(img));
+    if (hasLarge) {
+      stripped._hasImages = true;
+      stripped.images = stripped.images.map(img => isLargeImageData(img) ? '' : img);
+    }
+  }
+  if (stripped.previewImage && isLargeImageData(stripped.previewImage)) {
+    stripped._hasPreviewImage = true;
+    stripped.previewImage = '';
+  }
+  return stripped;
+}
+
+function bgStripImagesFromItems(items) {
+  return items.map(item => bgStripImagesFromItem(item));
+}
+
+function bgExtractImageData(item) {
+  const data = {};
+  if (item.images && Array.isArray(item.images)) {
+    const largeImages = item.images.filter(img => isLargeImageData(img));
+    if (largeImages.length > 0) data.images = [...item.images];
+  }
+  if (item.previewImage && isLargeImageData(item.previewImage)) {
+    data.previewImage = item.previewImage;
+  }
+  return Object.keys(data).length > 0 ? data : null;
+}
+
+function bgRestoreImagesToItem(item, imageData) {
+  if (!imageData) return item;
+  const restored = { ...item };
+  if (restored._hasImages && imageData.images) {
+    restored.images = imageData.images;
+    delete restored._hasImages;
+  }
+  if (restored._hasPreviewImage && imageData.previewImage) {
+    restored.previewImage = imageData.previewImage;
+    delete restored._hasPreviewImage;
+  }
+  return restored;
+}
+
+function bgRestoreImagesToItems(items, imagesMap) {
+  return items.map(item => {
+    const imageData = imagesMap[item.id];
+    return imageData ? bgRestoreImagesToItem(item, imageData) : item;
+  });
+}
+
+async function bgSaveAllItemImages(items) {
+  for (const item of items) {
+    const imageData = bgExtractImageData(item);
+    if (imageData) {
+      await bgSaveItemImages(item.id, imageData);
+    }
+  }
+}
+
+async function bgCollectImageData(items) {
+  const imageData = {};
+  const itemIds = items.map(item => item.id);
+
+  const metaKeys = itemIds.map(id => bgGetImageMetaKey(id));
+  const metaResult = await chrome.storage.local.get(metaKeys);
+
+  for (const key of metaKeys) {
+    if (metaResult[key]) {
+      imageData[key] = metaResult[key];
+      const meta = metaResult[key];
+      const itemId = key.substring(bgGetImageMetaKey('').length);
+
+      if (meta.images && meta.images.length > 0) {
+        for (const imgMeta of meta.images) {
+          const imageKey = bgGetImageKey(itemId, imgMeta.index);
+          if (imgMeta.chunkCount) {
+            const chunkKeys = [];
+            for (let i = 0; i < imgMeta.chunkCount; i++) {
+              chunkKeys.push(imageKey + '_chunk_' + i);
+            }
+            const chunkResult = await chrome.storage.local.get(chunkKeys);
+            for (let i = 0; i < imgMeta.chunkCount; i++) {
+              const chunkKey = imageKey + '_chunk_' + i;
+              if (chunkResult[chunkKey] !== undefined) {
+                imageData[chunkKey] = chunkResult[chunkKey];
+              }
+            }
+          }
+        }
+      }
+
+      if (meta.hasPreview && meta.preview && meta.preview.chunkCount) {
+        const previewKey = bgGetPreviewImageKey(itemId);
+        const chunkKeys = [];
+        for (let i = 0; i < meta.preview.chunkCount; i++) {
+          chunkKeys.push(previewKey + '_chunk_' + i);
+        }
+        const chunkResult = await chrome.storage.local.get(chunkKeys);
+        for (let i = 0; i < meta.preview.chunkCount; i++) {
+          const chunkKey = previewKey + '_chunk_' + i;
+          if (chunkResult[chunkKey] !== undefined) {
+            imageData[chunkKey] = chunkResult[chunkKey];
+          }
+        }
+      }
+    }
+  }
+
+  return Object.keys(imageData).length > 0 ? imageData : null;
+}
+
+async function bgSaveItemImages(itemId, imageData) {
+  const meta = { imageCount: 0, hasPreview: false, images: [], preview: null };
+
+  if (imageData.images && Array.isArray(imageData.images)) {
+    let imgIndex = 0;
+    for (let i = 0; i < imageData.images.length; i++) {
+      const img = imageData.images[i];
+      if (isLargeImageData(img)) {
+        const imageKey = bgGetImageKey(itemId, imgIndex);
+        const chunkCount = await bgSaveChunks(imageKey, img);
+        meta.images.push({ index: imgIndex, originalIndex: i, chunkCount });
+        imgIndex++;
+      }
+    }
+    meta.imageCount = imgIndex;
+  }
+
+  if (imageData.previewImage && isLargeImageData(imageData.previewImage)) {
+    const previewKey = bgGetPreviewImageKey(itemId);
+    const chunkCount = await bgSaveChunks(previewKey, imageData.previewImage);
+    meta.preview = { chunkCount };
+    meta.hasPreview = true;
+  }
+
+  if (meta.imageCount > 0 || meta.hasPreview) {
+    await chrome.storage.local.set({ [bgGetImageMetaKey(itemId)]: meta });
+  }
+}
+
+async function bgLoadAllItemImages(itemIds) {
+  if (!itemIds || itemIds.length === 0) return {};
+  const imagesMap = {};
+  for (const itemId of itemIds) {
+    const imageData = await bgLoadItemImages(itemId);
+    if (imageData) {
+      imagesMap[itemId] = imageData;
+    }
+  }
+  return imagesMap;
+}
+
+async function bgLoadChunks(baseKey, chunkCount) {
+  const keys = [];
+  for (let i = 0; i < chunkCount; i++) {
+    keys.push(baseKey + '_chunk_' + i);
+  }
+  const result = await chrome.storage.local.get(keys);
+  let data = '';
+  for (let i = 0; i < chunkCount; i++) {
+    const chunk = result[baseKey + '_chunk_' + i];
+    if (chunk !== undefined) {
+      data += chunk;
+    }
+  }
+  return data;
+}
+
+async function bgSaveChunks(baseKey, data) {
+  const CHUNK_SIZE = 7000;
+  const chunks = [];
+  for (let i = 0; i < data.length; i += CHUNK_SIZE) {
+    chunks.push(data.substring(i, i + CHUNK_SIZE));
+  }
+  const keysToSave = {};
+  for (let i = 0; i < chunks.length; i++) {
+    keysToSave[baseKey + '_chunk_' + i] = chunks[i];
+  }
+  await chrome.storage.local.set(keysToSave);
+  return chunks.length;
+}
+
+async function bgDeleteChunks(baseKey, chunkCount) {
+  const keysToRemove = [];
+  for (let i = 0; i < chunkCount; i++) {
+    keysToRemove.push(baseKey + '_chunk_' + i);
+  }
+  if (keysToRemove.length > 0) {
+    await chrome.storage.local.remove(keysToRemove);
+  }
+}
+
+async function bgLoadItemImages(itemId) {
+  const metaResult = await chrome.storage.local.get(bgGetImageMetaKey(itemId));
+  const meta = metaResult[bgGetImageMetaKey(itemId)];
+  if (!meta) return null;
+
+  const data = {};
+
+  if (meta.images && meta.images.length > 0) {
+    data.images = [];
+    for (const imgMeta of meta.images) {
+      const imageKey = bgGetImageKey(itemId, imgMeta.index);
+      const img = await bgLoadChunks(imageKey, imgMeta.chunkCount);
+      if (img) {
+        while (data.images.length <= imgMeta.originalIndex) {
+          data.images.push('');
+        }
+        data.images[imgMeta.originalIndex] = img;
+      }
+    }
+  } else if (meta.imageCount > 0) {
+    data.images = [];
+    const keys = [];
+    for (let i = 0; i < meta.imageCount; i++) {
+      keys.push(bgGetImageKey(itemId, i));
+    }
+    const result = await chrome.storage.local.get(keys);
+    for (let i = 0; i < meta.imageCount; i++) {
+      const img = result[bgGetImageKey(itemId, i)];
+      if (img) data.images.push(img);
+    }
+  }
+
+  if (meta.hasPreview) {
+    if (meta.preview && meta.preview.chunkCount) {
+      const previewKey = bgGetPreviewImageKey(itemId);
+      const preview = await bgLoadChunks(previewKey, meta.preview.chunkCount);
+      if (preview) data.previewImage = preview;
+    } else {
+      const preview = (await chrome.storage.local.get(bgGetPreviewImageKey(itemId)))[bgGetPreviewImageKey(itemId)];
+      if (preview) data.previewImage = preview;
+    }
+  }
+
+  return Object.keys(data).length > 0 ? data : null;
+}
+
+async function bgDeleteItemImages(itemId) {
+  const metaResult = await chrome.storage.local.get(bgGetImageMetaKey(itemId));
+  const meta = metaResult[bgGetImageMetaKey(itemId)];
+  const keysToRemove = [bgGetImageMetaKey(itemId)];
+
+  if (meta) {
+    if (meta.images && meta.images.length > 0) {
+      for (const imgMeta of meta.images) {
+        const imageKey = bgGetImageKey(itemId, imgMeta.index);
+        await bgDeleteChunks(imageKey, imgMeta.chunkCount);
+      }
+    } else {
+      for (let i = 0; i < meta.imageCount; i++) {
+        keysToRemove.push(bgGetImageKey(itemId, i));
+      }
+    }
+    if (meta.hasPreview) {
+      if (meta.preview && meta.preview.chunkCount) {
+        await bgDeleteChunks(bgGetPreviewImageKey(itemId), meta.preview.chunkCount);
+      } else {
+        keysToRemove.push(bgGetPreviewImageKey(itemId));
+      }
+    }
+  }
+
+  if (keysToRemove.length > 1) {
+    await chrome.storage.local.remove(keysToRemove);
+  }
+}
+
+const BG_ITEMS_CHUNK_PREFIX = 'items_chunk_';
+
+async function bgLoadItemsChunks() {
+  const countResult = await chrome.storage.local.get(['itemsChunkCount']);
+  const chunkCount = countResult.itemsChunkCount || 0;
+  if (chunkCount <= 0) {
+    // 兼容旧格式
+    const oldResult = await chrome.storage.local.get(['items']);
+    return oldResult.items || [];
+  }
+  const keys = [];
+  for (let i = 0; i < chunkCount; i++) {
+    keys.push(BG_ITEMS_CHUNK_PREFIX + i);
+  }
+  const result = await chrome.storage.local.get(keys);
+  let items = [];
+  for (let i = 0; i < chunkCount; i++) {
+    const chunk = result[BG_ITEMS_CHUNK_PREFIX + i];
+    if (Array.isArray(chunk)) {
+      items = items.concat(chunk);
+    }
+  }
+  return items;
+}
+
+async function bgLoadItemsWithImages() {
+  const items = await bgLoadItemsChunks();
+  const itemIds = items.map(item => item.id);
+  const imagesMap = await bgLoadAllItemImages(itemIds);
+  return bgRestoreImagesToItems(items, imagesMap);
+}
+
+async function bgSaveItemsChunks(items) {
+  const chunks = [];
+  const chunkSize = 50;
+  for (let i = 0; i < items.length; i += chunkSize) {
+    chunks.push(items.slice(i, i + chunkSize));
+  }
+
+  const dataToSave = {};
+  for (let i = 0; i < chunks.length; i++) {
+    dataToSave[BG_ITEMS_CHUNK_PREFIX + i] = chunks[i];
+  }
+  dataToSave.itemsChunkCount = chunks.length;
+
+  const oldResult = await chrome.storage.local.get(['itemsChunkCount']);
+  const oldChunkCount = oldResult.itemsChunkCount || 0;
+  if (oldChunkCount > chunks.length) {
+    const keysToRemove = [];
+    for (let i = chunks.length; i < oldChunkCount; i++) {
+      keysToRemove.push(BG_ITEMS_CHUNK_PREFIX + i);
+    }
+    await chrome.storage.local.remove(keysToRemove);
+  }
+
+  await chrome.storage.local.set(dataToSave);
+}
+
 // 增量同步常量和工具函数
 const SYNC_VERSION = '3.0';
 const MAX_SYNC_LOG = 100;
@@ -77,6 +425,48 @@ function calculateItemChecksum(item) {
     hash = hash & hash;
   }
   return Math.abs(hash).toString(16).padStart(8, '0');
+}
+
+function deepMerge(target, source) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    return source;
+  }
+
+  const output = { ...target };
+
+  for (const key in source) {
+    if (source.hasOwnProperty(key)) {
+      if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+        if (target[key] && typeof target[key] === 'object') {
+          output[key] = deepMerge(target[key], source[key]);
+        } else {
+          output[key] = source[key];
+        }
+      } else {
+        output[key] = source[key];
+      }
+    }
+  }
+
+  return output;
+}
+
+function normalizeWebDAVUrl(baseUrl) {
+  if (!baseUrl) return baseUrl;
+
+  let url = baseUrl.trim();
+
+  if (!/^https?:\/\//i.test(url)) {
+    if (url.startsWith('htt://')) {
+      url = 'http' + url;
+    } else if (url.startsWith('http:')) {
+      url = 'http://' + url.substring(5);
+    } else {
+      url = 'http://' + url;
+    }
+  }
+
+  return url.replace(/\/$/, '');
 }
 
 // 生成设备ID
@@ -217,21 +607,8 @@ async function handleWebDAVRequest(request) {
     return { success: false, error: 'WebDAV 配置不完整' };
   }
 
-  let baseUrl = serverUrl.trim();
-  
-  if (!/^https?:\/\//i.test(baseUrl)) {
-    console.warn('Background: URL scheme 错误，自动修正', baseUrl);
-    if (baseUrl.startsWith('htt://')) {
-      baseUrl = 'http' + baseUrl;
-    } else if (baseUrl.startsWith('http:')) {
-      baseUrl = 'http://' + baseUrl.substring(5);
-    } else {
-      baseUrl = 'http://' + baseUrl;
-    }
-    console.log('Background: 修正后的 URL', baseUrl);
-  }
-  
-  baseUrl = baseUrl.replace(/\/$/, '');
+  let baseUrl = normalizeWebDAVUrl(serverUrl);
+  console.log('Background: 使用规范化后的 URL', baseUrl);
   const fullPath = path.startsWith('/') ? path : '/' + path;
   const url = baseUrl + fullPath;
 
@@ -326,30 +703,7 @@ class BackgroundService {
 
   // 深度合并对象
   deepMerge(target, source) {
-    if (!source || typeof source !== 'object' || Array.isArray(source)) {
-      return source;
-    }
-    
-    const output = { ...target };
-    
-    for (const key in source) {
-      if (source.hasOwnProperty(key)) {
-        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-          // 如果 source[key] 是对象且 target[key] 也是对象，则递归合并
-          if (target[key] && typeof target[key] === 'object') {
-            output[key] = this.deepMerge(target[key], source[key]);
-          } else {
-            // 否则直接使用 source[key]
-            output[key] = source[key];
-          }
-        } else {
-          // 基本类型直接赋值
-          output[key] = source[key];
-        }
-      }
-    }
-    
-    return output;
+    return deepMerge(target, source);
   }
 
   // 默认 WebDAV 配置
@@ -448,15 +802,14 @@ class BackgroundService {
         console.log('Background: WebDAV配置已更新（来自settings.webdav）', this.webdavConfig);
       }
       
-      // 数据变更时同步
-      if (changes.items) {
+      // 数据变更时同步（检测分片变化）
+      const hasChunkChange = Object.keys(changes).some(k => k.startsWith(BG_ITEMS_CHUNK_PREFIX));
+      if (hasChunkChange || changes.items) {
         syncLogger.log('STORAGE', 'items变更检测', {
           syncOnChange: this.syncConfig?.syncOnChange,
           webdavEnabled: this.webdavConfig?.enabled,
-          hasOldValue: !!changes.items.oldValue,
-          hasNewValue: !!changes.items.newValue,
-          oldCount: changes.items.oldValue?.length,
-          newCount: changes.items.newValue?.length
+          hasChunkChange,
+          hasOldItems: !!changes.items?.oldValue
         });
         
         if (this.webdavConfig?.enabled && this.syncConfig?.syncOnChange) {
@@ -591,12 +944,18 @@ class BackgroundService {
     try {
       const deviceId = await getOrCreateDeviceId();
       const localResult = await chrome.storage.local.get([
-        'items', 'tags', 'settings', 'lastSyncTime',
+        'tags', 'settings', 'lastSyncTime',
         'deletedItems', 'syncMeta', 'pendingChanges'
       ]);
 
+      // 加载分片 items 并恢复图片
+      const rawItems = await bgLoadItemsChunks();
+      const rawItemIds = rawItems.map(item => item.id);
+      const imagesMap = await bgLoadAllItemImages(rawItemIds);
+      const itemsWithImages = bgRestoreImagesToItems(rawItems, imagesMap);
+
       // 确保所有项目有版本号
-      const items = (localResult.items || []).map(item => ({
+      const items = itemsWithImages.map(item => ({
         ...item,
         version: item.version || 1,
         checksum: item.checksum || calculateItemChecksum(item)
@@ -610,14 +969,18 @@ class BackgroundService {
         deletedIds: deletedItems.map(t => ({ id: t.id, deletedAt: t.deletedAt }))
       });
 
+      const itemsToSync = bgStripImagesFromItems(items);
+      const imageData = await bgCollectImageData(items);
+
       const localData = {
-        items,
+        items: itemsToSync,
         deletedItems,
         tags: localResult.tags || [],
         settings: localResult.settings || {},
-        timestamp: localResult.lastSyncTime || 0
+        timestamp: localResult.lastSyncTime || 0,
+        imageData: imageData
       };
-      
+
       const remoteResult = await this.downloadData(webdavConfig);
       
       if (remoteResult.success) {
@@ -798,17 +1161,24 @@ class BackgroundService {
       )
     };
 
+    // 合并图片数据（远程优先）
+    const localImageData = localData.imageData || {};
+    const remoteImageData = (remoteData.imageData || remoteData.data?.imageData) || {};
+    const mergedImageData = { ...localImageData, ...remoteImageData };
+
     const result = {
       items: Array.from(itemMap.values()),
       deletedItems: mergedDeletedItems,
       tags: mergedTags,
       settings: mergedSettings,
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      imageData: Object.keys(mergedImageData).length > 0 ? mergedImageData : null
     };
 
     syncLogger.log('MERGE', '合并最终结果', {
       items: result.items.length,
-      deletedItems: result.deletedItems.length
+      deletedItems: result.deletedItems.length,
+      hasImageData: !!result.imageData
     });
 
     return result;
@@ -816,17 +1186,48 @@ class BackgroundService {
 
   // 保存合并后的数据
   async saveMergedData(mergedData) {
+    const itemsToSave = bgStripImagesFromItems(mergedData.items);
+    await bgSaveAllItemImages(mergedData.items);
+
+    // 保存分片 items
+    const chunks = [];
+    const chunkSize = 50;
+    for (let i = 0; i < itemsToSave.length; i += chunkSize) {
+      chunks.push(itemsToSave.slice(i, i + chunkSize));
+    }
     const dataToSave = {
-      items: mergedData.items,
       deletedItems: mergedData.deletedItems,
       tags: mergedData.tags,
       settings: mergedData.settings
     };
+    for (let i = 0; i < chunks.length; i++) {
+      dataToSave[BG_ITEMS_CHUNK_PREFIX + i] = chunks[i];
+    }
+    dataToSave.itemsChunkCount = chunks.length;
+
+    // 清理多余的分片
+    const oldResult = await chrome.storage.local.get(['itemsChunkCount']);
+    const oldChunkCount = oldResult.itemsChunkCount || 0;
+    if (oldChunkCount > chunks.length) {
+      const keysToRemove = [];
+      for (let i = chunks.length; i < oldChunkCount; i++) {
+        keysToRemove.push(BG_ITEMS_CHUNK_PREFIX + i);
+      }
+      await chrome.storage.local.remove(keysToRemove);
+    }
+
+    // 保存图片数据
+    if (mergedData.imageData) {
+      for (const [key, value] of Object.entries(mergedData.imageData)) {
+        dataToSave[key] = value;
+      }
+    }
 
     await chrome.storage.local.set(dataToSave);
     syncLogger.log('SAVE', '数据已保存', {
       items: mergedData.items.length,
-      deletedItems: mergedData.deletedItems.length
+      deletedItems: mergedData.deletedItems.length,
+      hasImageData: !!mergedData.imageData
     });
   }
   
@@ -855,21 +1256,8 @@ class BackgroundService {
       pathsToTry.push(`/vol1/1000${cleanSyncPath.replace(`/${user}/`, '/')}/${cleanFilename}`);
     }
 
-    let baseUrl = serverUrl.trim();
-    
-    if (!/^https?:\/\//i.test(baseUrl)) {
-      console.warn('Background downloadData: URL scheme 错误，自动修正', baseUrl);
-      if (baseUrl.startsWith('htt://')) {
-        baseUrl = 'http' + baseUrl;
-      } else if (baseUrl.startsWith('http:')) {
-        baseUrl = 'http://' + baseUrl.substring(5);
-      } else {
-        baseUrl = 'http://' + baseUrl;
-      }
-      console.log('Background downloadData: 修正后的URL', baseUrl);
-    }
-    
-    baseUrl = baseUrl.replace(/\/$/, '');
+    let baseUrl = normalizeWebDAVUrl(serverUrl);
+    console.log('Background downloadData: 使用规范化后的URL', baseUrl);
     const credentials = btoa(`${username}:${password}`);
     
     for (const filePath of pathsToTry) {
@@ -941,7 +1329,8 @@ class BackgroundService {
       deletedItems: data.deletedItems || [],
       tags: data.tags || [],
       settings: data.settings || {},
-      timestamp: Date.now()
+      timestamp: Date.now(),
+      imageData: data.imageData || null
     };
 
     syncLogger.log('UPLOAD', '准备上传数据', {
@@ -967,21 +1356,8 @@ class BackgroundService {
       pathsToTry.push(`/vol1/1000${cleanSyncPath.replace(`/${username}/`, '/')}/${cleanFilename}`);
     }
 
-    let baseUrl = serverUrl.trim();
-    
-    if (!/^https?:\/\//i.test(baseUrl)) {
-      console.warn('Background directUpload: URL scheme 错误，自动修正', baseUrl);
-      if (baseUrl.startsWith('htt://')) {
-        baseUrl = 'http' + baseUrl;
-      } else if (baseUrl.startsWith('http:')) {
-        baseUrl = 'http://' + baseUrl.substring(5);
-      } else {
-        baseUrl = 'http://' + baseUrl;
-      }
-      console.log('Background directUpload: 修正后的URL', baseUrl);
-    }
-    
-    baseUrl = baseUrl.replace(/\/$/, '');
+    let baseUrl = normalizeWebDAVUrl(serverUrl);
+    console.log('Background directUpload: 使用规范化后的URL', baseUrl);
     const credentials = btoa(`${username}:${password}`);
     
     for (const filePath of pathsToTry) {
@@ -1165,8 +1541,7 @@ class BackgroundService {
   // 快速保存图片
   async quickSaveImage(imageUrl, tab) {
     try {
-      const result = await chrome.storage.local.get(['items']);
-      const items = result.items || [];
+      const items = await bgLoadItemsChunks();
 
       // 获取图片尺寸信息
       const imageInfo = await this.getImageInfo(imageUrl);
@@ -1187,8 +1562,9 @@ class BackgroundService {
         updatedAt: new Date().toISOString()
       };
 
-      items.push(note);
-      await chrome.storage.local.set({ items });
+      items.push(bgStripImagesFromItem(note));
+      await bgSaveAllItemImages([note]);
+      await bgSaveItemsChunks(items);
 
       chrome.notifications.create({
         type: 'basic',
@@ -1227,8 +1603,7 @@ class BackgroundService {
 
   // 保存选中文本为笔记
   async saveSelectionAsNote(selectedText, tab) {
-    const result = await chrome.storage.local.get(['items']);
-    const items = result.items || [];
+    const items = await bgLoadItemsChunks();
 
     const note = {
       id: Date.now().toString(36) + Math.random().toString(36).substr(2),
@@ -1240,8 +1615,9 @@ class BackgroundService {
       updatedAt: new Date().toISOString()
     };
 
-    items.push(note);
-    await chrome.storage.local.set({ items });
+    items.push(bgStripImagesFromItem(note));
+    await bgSaveAllItemImages([note]);
+    await bgSaveItemsChunks(items);
 
     chrome.notifications.create({
       type: 'basic',
@@ -1253,8 +1629,7 @@ class BackgroundService {
 
   // 保存选中文本为提示词
   async saveSelectionAsPrompt(selectedText, tab) {
-    const result = await chrome.storage.local.get(['items']);
-    const items = result.items || [];
+    const items = await bgLoadItemsChunks();
 
     const prompt = {
       id: Date.now().toString(36) + Math.random().toString(36).substr(2),
@@ -1265,8 +1640,9 @@ class BackgroundService {
       updatedAt: new Date().toISOString()
     };
 
-    items.push(prompt);
-    await chrome.storage.local.set({ items });
+    items.push(bgStripImagesFromItem(prompt));
+    await bgSaveAllItemImages([prompt]);
+    await bgSaveItemsChunks(items);
 
     chrome.notifications.create({
       type: 'basic',

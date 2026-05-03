@@ -60,7 +60,8 @@ class WebDAVClient {
       items: data.items || [],
       deletedItems: data.deletedItems || [],
       tags: data.tags || [],
-      settings: data.settings || {}
+      settings: data.settings || {},
+      imageData: data.imageData || null
     };
 
     const pathsToTry = this.getPathsToTry();
@@ -239,14 +240,10 @@ class WebDAVClient {
 
   // 计算数据校验和
   calculateChecksum(data) {
-    const str = JSON.stringify(data);
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
+    if (data.items) {
+      return Utils.calculateItemChecksum({ title: '', content: JSON.stringify(data), tags: [] });
     }
-    return hash.toString(36);
+    return Utils.calculateItemChecksum(data);
   }
 
   // 重命名文件（通过下载 + 上传 + 删除实现，兼容不支持 COPY 的服务器）
@@ -431,7 +428,12 @@ class WebDAVClient {
       if (result.success && result.data) {
         const syncData = JSON.parse(result.data);
         const data = syncData.items ? syncData : (syncData.data || syncData);
-        
+
+        // 确保 imageData 被包含在返回数据中
+        if (syncData.imageData) {
+          data.imageData = syncData.imageData;
+        }
+
         // 仅记录校验和，不强制验证（因为 NAS 可能格式化 JSON）
         if (syncData.meta?.checksum) {
           const actualChecksum = this.calculateChecksum(data);
@@ -442,7 +444,7 @@ class WebDAVClient {
             console.log('WebDAV: 校验和验证通过', filePath);
           }
         }
-        
+
         return {
           success: true,
           data: data,
@@ -451,7 +453,7 @@ class WebDAVClient {
           path: filePath
         };
       }
-      
+
       return { success: false, error: '文件不存在或为空' };
     } catch (error) {
       return { success: false, error: error.message };

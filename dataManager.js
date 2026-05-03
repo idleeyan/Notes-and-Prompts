@@ -22,6 +22,8 @@ class DataManager {
     this.tags = new Set();
     this.dataVersion = '3.0';
     this.syncManagerReady = false;
+    this.ITEMS_CHUNK_PREFIX = 'items_chunk_';
+    this.ITEMS_CHUNK_SIZE = 50;
   }
 
   async init() {
@@ -55,19 +57,7 @@ class DataManager {
   }
 
   calculateItemChecksum(item) {
-    const relevantData = {
-      title: item.title || '',
-      content: item.content || '',
-      tags: (item.tags || []).sort()
-    };
-    const str = JSON.stringify(relevantData);
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash;
-    }
-    return Math.abs(hash).toString(16).padStart(8, '0');
+    return Utils.calculateItemChecksum(item);
   }
 
   recordSyncChange(action, item) {
@@ -76,12 +66,48 @@ class DataManager {
   // 加载数据
   async loadData() {
     const result = await chrome.storage.local.get([
-      'items', 'settings', 'tags', 'prompts', 'notes',
-      'webdavConfig', 'deletedItems'
+      'settings', 'tags', 'prompts', 'notes',
+      'webdavConfig', 'deletedItems', 'itemsChunkCount'
     ]);
 
-    this.items = Array.isArray(result.items) ? result.items : [];
     this.deletedItems = Array.isArray(result.deletedItems) ? result.deletedItems : [];
+
+    // 加载分片 items
+    this.items = await this.loadItemsChunks(result.itemsChunkCount);
+
+    // 兼容旧格式：如果分片不存在，尝试加载旧的 items
+    if (this.items.length === 0) {
+      const oldResult = await chrome.storage.local.get(['items']);
+      if (Array.isArray(oldResult.items) && oldResult.items.length > 0) {
+        this.items = oldResult.items;
+        console.log('DataManager: 从旧格式加载 items', this.items.length);
+      }
+    }
+
+    try {
+      if (typeof imageManager !== 'undefined') {
+        const needsMigration = this.items.some(item =>
+          (item.images && item.images.some(img => imageManager.isLargeImageData(img))) ||
+          (item.previewImage && imageManager.isLargeImageData(item.previewImage))
+        );
+
+        if (needsMigration) {
+          console.log('DataManager: 检测到内联图片数据，执行迁移');
+          await imageManager.saveAllItemImages(this.items);
+          const strippedItems = imageManager.stripImagesFromItems(this.items);
+          this.items = strippedItems;
+          await this.saveItemsChunks(strippedItems);
+          await chrome.storage.local.remove(['items']);
+          console.log('DataManager: 图片数据迁移完成');
+        }
+
+        const itemIds = this.items.map(item => item.id);
+        const imagesMap = await imageManager.loadAllItemImages(itemIds);
+        this.items = imageManager.restoreImagesToItems(this.items, imagesMap);
+      }
+    } catch (e) {
+      console.error('DataManager: 图片数据处理失败，使用原始数据', e);
+    }
 
     console.log('DataManager: 加载数据', {
       items: this.items.length,
@@ -98,32 +124,58 @@ class DataManager {
     this.extractTagsFromItems();
   }
 
-  // 深度合并对象
-  deepMerge(target, source) {
-    if (!source || typeof source !== 'object' || Array.isArray(source)) {
-      return source;
+  // 加载分片 items
+  async loadItemsChunks(chunkCount) {
+    if (!chunkCount || chunkCount <= 0) return [];
+    const keys = [];
+    for (let i = 0; i < chunkCount; i++) {
+      keys.push(this.ITEMS_CHUNK_PREFIX + i);
     }
-    
-    const output = { ...target };
-    
-    for (const key in source) {
-      if (source.hasOwnProperty(key)) {
-        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-          // 如果 source[key] 是对象且 target[key] 也是对象，则递归合并
-          if (target[key] && typeof target[key] === 'object') {
-            output[key] = this.deepMerge(target[key], source[key]);
-          } else {
-            // 否则直接使用 source[key]
-            output[key] = source[key];
-          }
-        } else {
-          // 基本类型直接赋值
-          output[key] = source[key];
-        }
+    const result = await chrome.storage.local.get(keys);
+    let items = [];
+    for (let i = 0; i < chunkCount; i++) {
+      const chunk = result[this.ITEMS_CHUNK_PREFIX + i];
+      if (Array.isArray(chunk)) {
+        items = items.concat(chunk);
       }
     }
-    
-    return output;
+    return items;
+  }
+
+  // 保存分片 items
+  async saveItemsChunks(items) {
+    const chunks = [];
+    for (let i = 0; i < items.length; i += this.ITEMS_CHUNK_SIZE) {
+      chunks.push(items.slice(i, i + this.ITEMS_CHUNK_SIZE));
+    }
+
+    const oldResult = await chrome.storage.local.get(['itemsChunkCount']);
+    const oldChunkCount = oldResult.itemsChunkCount || 0;
+
+    for (let i = 0; i < chunks.length; i++) {
+      try {
+        await chrome.storage.local.set({
+          [this.ITEMS_CHUNK_PREFIX + i]: chunks[i]
+        });
+      } catch (e) {
+        console.error(`saveItemsChunks: chunk ${i} 写入失败 (${JSON.stringify(chunks[i]).length} bytes)`, e);
+        throw new Error(`数据分片 ${i} 写入失败: ${e.message}`);
+      }
+    }
+    await chrome.storage.local.set({ itemsChunkCount: chunks.length });
+
+    if (oldChunkCount > chunks.length) {
+      const keysToRemove = [];
+      for (let i = chunks.length; i < oldChunkCount; i++) {
+        keysToRemove.push(this.ITEMS_CHUNK_PREFIX + i);
+      }
+      await chrome.storage.local.remove(keysToRemove);
+    }
+  }
+
+  // 深度合并对象
+  deepMerge(target, source) {
+    return Utils.deepMerge(target, source);
   }
 
   // 从现有项目中提取标签
@@ -159,26 +211,35 @@ class DataManager {
     }
   }
 
-  // 保存数据
-  async saveData() {
+  async saveData(changedItemIds = null) {
     const existing = await chrome.storage.local.get(['syncConfig', 'webdavConfig']);
 
-    const dataToSave = {
-      items: this.items,
+    let itemsToSave = this.items;
+    if (typeof imageManager !== 'undefined') {
+      if (changedItemIds) {
+        const changedItems = this.items.filter(item => changedItemIds.includes(item.id));
+        await imageManager.saveItemsImages(changedItems);
+      } else {
+        await imageManager.saveAllItemImages(this.items);
+      }
+      itemsToSave = imageManager.stripImagesFromItems(this.items);
+    }
+
+    await this.saveItemsChunks(itemsToSave);
+
+    await chrome.storage.local.set({
       deletedItems: this.deletedItems,
       settings: this.settings,
       tags: Array.from(this.tags)
-    };
+    });
 
     if (existing.syncConfig) {
-      dataToSave.syncConfig = existing.syncConfig;
+      await chrome.storage.local.set({ syncConfig: existing.syncConfig });
     }
 
     if (existing.webdavConfig) {
-      dataToSave.webdavConfig = existing.webdavConfig;
+      await chrome.storage.local.set({ webdavConfig: existing.webdavConfig });
     }
-
-    await chrome.storage.local.set(dataToSave);
   }
 
   // ========== 提示词操作 ==========
@@ -203,7 +264,7 @@ class DataManager {
     this.items.push(prompt);
     this.updateTags(prompt.tags);
     this.recordSyncChange('create', prompt);
-    await this.saveData();
+    await this.saveData([prompt.id]);
     return prompt;
   }
 
@@ -229,7 +290,7 @@ class DataManager {
 
     if (updateData.tags) this.updateTags(updateData.tags);
     this.recordSyncChange('update', this.items[index]);
-    await this.saveData();
+    await this.saveData([id]);
     return this.items[index];
   }
 
@@ -264,7 +325,7 @@ class DataManager {
     this.items.push(note);
     this.updateTags(note.tags);
     this.recordSyncChange('create', note);
-    await this.saveData();
+    await this.saveData([note.id]);
     return note;
   }
 
@@ -293,7 +354,7 @@ class DataManager {
 
     if (updateData.tags) this.updateTags(updateData.tags);
     this.recordSyncChange('update', this.items[index]);
-    await this.saveData();
+    await this.saveData([id]);
     return this.items[index];
   }
 
@@ -326,6 +387,9 @@ class DataManager {
       });
     }
     this.items = this.items.filter(item => item.id !== id);
+    if (typeof imageManager !== 'undefined') {
+      await imageManager.deleteItemImages(id);
+    }
     await this.saveData();
     
     // 验证保存成功
@@ -590,6 +654,7 @@ class DataManager {
     }
 
     // 创建已删除ID集合
+    const deletedIds = new Set(this.deletedItems.map(t => t.id));
 
     if (data.items && Array.isArray(data.items)) {
       const existingItemsMap = new Map(this.items.map(item => [item.id, item]));

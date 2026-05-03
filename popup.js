@@ -28,6 +28,24 @@ class PopupManager {
       this.handleItemClick(e, 'prompt');
     });
 
+    // 图片预览点击事件（事件委托）
+    document.getElementById('prompts-list').addEventListener('click', (e) => {
+      const imageWrapper = e.target.closest('.item-image[data-preview]');
+      if (imageWrapper) {
+        e.stopPropagation();
+        this.openImagePreview(imageWrapper.dataset.preview);
+      }
+    });
+
+    // 图片预览弹窗关闭事件
+    const previewModal = document.getElementById('image-preview-modal');
+    previewModal.querySelector('.image-preview-overlay').addEventListener('click', () => {
+      this.closeImagePreview();
+    });
+    previewModal.querySelector('.image-preview-close').addEventListener('click', () => {
+      this.closeImagePreview();
+    });
+
     // 一级入口按钮
     const quickNoteBtn = document.getElementById('quick-note-btn');
     if (quickNoteBtn) {
@@ -88,9 +106,15 @@ class PopupManager {
     if (!isPrompt && item.images && item.images.length > 0) {
       const imageUrl = item.images[0];
       imageHtml = `
-        <div class="item-image">
+        <div class="item-image" data-preview="${this.escapeHtml(imageUrl)}">
           <img src="${this.escapeHtml(imageUrl)}" alt="图片" loading="lazy">
           ${item.images.length > 1 ? `<div class="item-image-count">+${item.images.length - 1}</div>` : ''}
+        </div>
+      `;
+    } else if (isPrompt && item.previewImage) {
+      imageHtml = `
+        <div class="item-image item-image-preview" data-preview="${this.escapeHtml(item.previewImage)}">
+          <img src="${this.escapeHtml(item.previewImage)}" alt="预览效果" loading="lazy">
         </div>
       `;
     }
@@ -211,25 +235,29 @@ class PopupManager {
     const notesUrl = chrome.runtime.getURL('notes.html');
     chrome.tabs.create({ url: notesUrl });
   }
-  
-  // HTML转义
-  escapeHtml(text) {
-    if (!text) return '';
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
+
+  // 打开图片预览
+  openImagePreview(imageUrl) {
+    const modal = document.getElementById('image-preview-modal');
+    const img = document.getElementById('image-preview-img');
+    img.src = imageUrl;
+    modal.classList.add('active');
   }
 
-  // 显示提示
-  showToast(message, type = 'success') {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
+  // 关闭图片预览
+  closeImagePreview() {
+    const modal = document.getElementById('image-preview-modal');
+    modal.classList.remove('active');
+    document.getElementById('image-preview-img').src = '';
+  }
 
-    setTimeout(() => {
-      toast.remove();
-    }, 3000);
+  // HTML转义
+  escapeHtml(text) {
+    return Utils.escapeHtml(text);
+  }
+
+  showToast(message, type = 'success') {
+    Utils.showToast(message, type);
   }
 }
 

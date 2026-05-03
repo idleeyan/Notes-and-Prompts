@@ -114,6 +114,72 @@ const Utils = {
       result = result.replace(regex, '<mark>$1</mark>');
     });
     return result;
+  },
+
+  deepMerge(target, source) {
+    if (!source || typeof source !== 'object' || Array.isArray(source)) {
+      return source;
+    }
+
+    const output = { ...target };
+
+    for (const key in source) {
+      if (source.hasOwnProperty(key)) {
+        if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+          if (target[key] && typeof target[key] === 'object') {
+            output[key] = Utils.deepMerge(target[key], source[key]);
+          } else {
+            output[key] = source[key];
+          }
+        } else {
+          output[key] = source[key];
+        }
+      }
+    }
+
+    return output;
+  },
+
+  calculateItemChecksum(item) {
+    const relevantData = {
+      title: item.title || '',
+      content: item.content || '',
+      tags: (item.tags || []).sort()
+    };
+    const str = JSON.stringify(relevantData);
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(16).padStart(8, '0');
+  },
+
+  cleanUrl(url) {
+    if (!url) return url;
+    return url
+      .toLowerCase()
+      .replace(/^(https?:\/\/)?/, '')
+      .replace(/\/.*$/, '');
+  },
+
+  normalizeWebDAVUrl(baseUrl) {
+    if (!baseUrl) return baseUrl;
+
+    let url = baseUrl.trim();
+
+    if (!/^https?:\/\//i.test(url)) {
+      if (url.startsWith('htt://')) {
+        url = 'http' + url;
+      } else if (url.startsWith('http:')) {
+        url = 'http://' + url.substring(5);
+      } else {
+        url = 'http://' + url;
+      }
+    }
+
+    return url.replace(/\/$/, '');
   }
 };
 

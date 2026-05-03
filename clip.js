@@ -111,15 +111,15 @@ class ClipPage {
 
   // 加载数据管理器
   async loadDataManager() {
-    // 动态加载 dataManager.js
-    const script = document.createElement('script');
-    script.src = 'dataManager.js';
-    document.head.appendChild(script);
-    
-    await new Promise((resolve) => {
-      script.onload = resolve;
-    });
-    
+    if (typeof dataManager === 'undefined') {
+      await new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = 'dataManager.js';
+        script.onload = resolve;
+        script.onerror = reject;
+        document.head.appendChild(script);
+      });
+    }
     await dataManager.init();
   }
 
@@ -619,14 +619,7 @@ class ClipPage {
 
   // 显示提示
   showToast(message, type = 'success') {
-    const toast = document.createElement('div');
-    toast.className = `toast ${type}`;
-    toast.textContent = message;
-    document.body.appendChild(toast);
-
-    setTimeout(() => {
-      toast.remove();
-    }, 3000);
+    Utils.showToast(message, type);
   }
 
   // 更新清除样式按钮的显示状态
